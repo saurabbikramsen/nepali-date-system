@@ -2,7 +2,28 @@
   "name": "nepali-date-system",
   "version": "0.1.0",
   "description": "Bikram Sambat (Nepali) calendar for JavaScript: BS/AD conversion, date arithmetic and Nepal-time ranges for database queries",
+  "keywords": [
+    "nepali",
+    "nepali-date",
+    "bikram-sambat",
+    "bs",
+    "ad",
+    "date-converter",
+    "calendar",
+    "nepal",
+    "nepali-calendar",
+    "patro"
+  ],
+  "author": "Saurab Bikram Sen",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saurabbikramsen/nepali-date-system.git"
+  },
+  "homepage": "https://github.com/saurabbikramsen/nepali-date-system#readme",
+  "bugs": {
+    "url": "https://github.com/saurabbikramsen/nepali-date-system/issues"
+  },
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
