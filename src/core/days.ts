@@ -1,4 +1,4 @@
-import { FIRST_YEAR, LAST_YEAR, MONTH_LENGTHS } from "../defined.js";
+import { FIRST_YEAR, FIRST_YEAR_START_AD, LAST_YEAR, MONTH_LENGTHS } from "../defined.js";
 
 /** A calendar date with 1-based months, used for both BS and AD dates. */
 export interface DateParts {
@@ -9,11 +9,12 @@ export interface DateParts {
 
 const MS_PER_DAY = 86_400_000;
 
-/**
- * Day 0 is BS FIRST_YEAR-01-01 (BS 2000-01-01), which is AD 1943-04-14.
- * Update this if FIRST_YEAR changes.
- */
-const EPOCH_AD_MS = Date.UTC(1943, 3, 14);
+/** Day 0 is Baisakh 1 of FIRST_YEAR, as a UTC timestamp. */
+const EPOCH_AD_MS = Date.UTC(
+  FIRST_YEAR_START_AD.year,
+  FIRST_YEAR_START_AD.month - 1,
+  FIRST_YEAR_START_AD.day,
+);
 
 /**
  * YEAR_START[i] is the day number of Baisakh 1 of year FIRST_YEAR + i.
