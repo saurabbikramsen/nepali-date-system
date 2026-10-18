@@ -45,7 +45,7 @@ date.year; // 2083
 date.month; // 6
 date.day; // 26
 MONTH_NAMES[date.month - 1]; // "Aswin"
-date.DayOfWeek; // 1 (0 = Sunday … 6 = Saturday)
+date.dayOfWeek; // 1 (0 = Sunday … 6 = Saturday)
 date.dayOfYear; // 182
 date.daysInMonth; // 31
 date.daysInYear; // 365
@@ -110,7 +110,7 @@ const isProvisional = date.year > LAST_OFFICIAL_YEAR;
 
 ## Data sources
 
-BS months are 29 to 32 days long, and their lengths change from year to year, so they can't be calculated with a simple formula. This library stores the length of every month in every supported year ([src/defined.ts](src/defined.ts)), plus one anchor: Baisakh 1, 1975 BS is 13 April 1918 AD. Every conversion counts days from that anchor.
+BS months are 29 to 32 days long, and their lengths change from year to year, so they can't be calculated with a simple formula. This library stores the length of every month in every supported year, plus one anchor: Baisakh 1, 1975 BS is 13 April 1918 AD. Every conversion counts days from that anchor.
 
 The month lengths come from:
 
@@ -141,12 +141,10 @@ The test suite checks the table against records that don't come from date-conver
 - The AD date of Baisakh 1 for every year from 1975 to 2083.
 - A round trip (BS → AD → BS) for every day in the supported range.
 
-Each record links to its source in [test/fixtures/documented-dates.ts](test/fixtures/documented-dates.ts).
+Every record cites its source: the original document, article or catalogue entry.
 
-### Found a wrong date?
-
-[Open an issue](https://github.com/saurabbikramsen/nepali-date-system/issues) with the date, the result you expected and where it comes from, such as a printed patro, an official notice or a dated document.
+The table is also compared day by day with [nepali-date-converter](https://www.npmjs.com/package/nepali-date-converter) for BS 2000–2086, in both directions. The two agree everywhere except Baisakh–Jestha 2062, where 2005 newspaper datelines confirm this table, and the provisional years 2084–2086.
 
 ## License
 
-[MIT](LICENSE)
+MIT

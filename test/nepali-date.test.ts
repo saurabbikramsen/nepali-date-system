@@ -115,6 +115,12 @@ describe("calendar info", () => {
     expect(NepaliDate.daysInYear(2081)).toBe(366);
   });
 
+  it("gives the weekday with 0 = Sunday", () => {
+    expect(new NepaliDate(2083, 6, 26).dayOfWeek).toBe(1); // Monday, 2026-10-12
+    expect(new NepaliDate(2083, 6, 25).dayOfWeek).toBe(0); // Sunday, 2026-10-11
+    expect(new NepaliDate(2083, 6, 31).dayOfWeek).toBe(6); // Saturday, 2026-10-17
+  });
+
   it("adds up month lengths to the year length for every supported year", () => {
     for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
       let total = 0;
@@ -270,7 +276,7 @@ describe("NepaliDate.parse", () => {
 });
 
 describe("BS ↔ AD round trip", () => {
-  it("converts every day in the table BS → AD → BS and lands on consecutive AD days", () => {
+  it("converts every day in the table BS → AD → BS, on consecutive AD days with matching weekdays", () => {
     // Walk the BS calendar with daysInMonth and the AD calendar with Date, side by side.
     const iso = (y: number, m: number, d: number) =>
       `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -288,9 +294,14 @@ describe("BS ↔ AD round trip", () => {
           const actualAd = iso(converted.year, converted.month, converted.day);
           const back = NepaliDate.fromAd(converted.year, converted.month, converted.day);
 
-          if (actualAd !== expectedAd || back.toString() !== bs.toString()) {
+          if (
+            actualAd !== expectedAd ||
+            back.toString() !== bs.toString() ||
+            bs.dayOfWeek !== ad.getUTCDay()
+          ) {
             expect.fail(
-              `BS ${bs.toString()} → AD ${actualAd} (expected ${expectedAd}) → BS ${back.toString()}`,
+              `BS ${bs.toString()} → AD ${actualAd} (expected ${expectedAd}) → BS ${back.toString()}, ` +
+                `weekday ${bs.dayOfWeek} (expected ${ad.getUTCDay()})`,
             );
           }
           ad.setUTCDate(ad.getUTCDate() + 1);

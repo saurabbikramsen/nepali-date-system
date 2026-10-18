@@ -98,7 +98,7 @@ export class NepaliDate {
 
   // ----------getters----------
 
-  get DayOfWeek(): number {
+  get dayOfWeek(): number {
     return (this.days + EPOCH_WEEKDAY) % 7;
   }
   get dayOfYear(): number {
