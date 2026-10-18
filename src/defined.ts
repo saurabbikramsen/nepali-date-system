@@ -51,8 +51,9 @@ export const LAST_OFFICIAL_YEAR = 2083;
  * Sources:
  * - 1975–2083: rjach/sambat data/calendar.csv (Apache-2.0), which cross-checks up to
  *   20 open-source tables. 2081–2083 are verified against published panchangs.
- *   Rows marked "disputed" are years where those tables disagree; the value follows
- *   the majority or a documented correction (see sambat's data/README.md).
+ * - Rows marked "resolved" are years where open-source tables disagree. Each was
+ *   settled from contemporary dated documents; the evidence is in
+ *   test/fixtures/documented-dates.ts and is checked by the test suite.
  * - 2084–2086: provisional. Matches Hamro Patro (via alexblaze/nepali-miti) and
  *   bikram-sambat (medic), @sbmdkl/nepali-date-converter, ad-bs-converter and
  *   nepali_datetime (PyPI).
@@ -72,11 +73,11 @@ export const MONTH_LENGTHS: readonly YearMonthLengths[] = [
   /* 1986 */ [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
   /* 1987 */ [31, 32, 31, 32, 31, 30, 30, 29, 30, 29, 30, 30],
   /* 1988 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
-  /* 1989 */ [31, 31, 31, 32, 31, 31, 29, 30, 30, 29, 30, 30], // disputed
+  /* 1989 */ [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30], // resolved: Mangsir 1 = 16 Nov 1932 (weekday-dated Rana documents)
   /* 1990 */ [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
-  /* 1991 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 30], // disputed
+  /* 1991 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 30], // resolved: Poush 1 = 16 Dec 1934 (weekday-dated Rana documents)
   /* 1992 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
-  /* 1993 */ [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30], // disputed
+  /* 1993 */ [31, 31, 31, 32, 31, 31, 30, 29, 30, 29, 30, 30], // resolved: Shrawan 1 = 15 Jul 1936 (weekday-dated Rana documents)
   /* 1994 */ [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
   /* 1995 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 30],
   /* 1996 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31],
@@ -87,7 +88,7 @@ export const MONTH_LENGTHS: readonly YearMonthLengths[] = [
   /* 2001 */ [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
   /* 2002 */ [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
   /* 2003 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
-  /* 2004 */ [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31], // disputed
+  /* 2004 */ [30, 32, 31, 32, 31, 30, 30, 30, 29, 30, 29, 31], // resolved: Magh 1 = 14 Jan 1948 (weekday-dated 1948 deeds)
   /* 2005 */ [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
   /* 2006 */ [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
   /* 2007 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
@@ -145,7 +146,7 @@ export const MONTH_LENGTHS: readonly YearMonthLengths[] = [
   /* 2059 */ [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
   /* 2060 */ [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
   /* 2061 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],
-  /* 2062 */ [31, 31, 31, 32, 31, 31, 29, 30, 29, 30, 29, 31], // disputed: Jestha 1 on 15 May 2005, per nepali-datetime's 2024 fix
+  /* 2062 */ [31, 31, 31, 32, 31, 31, 29, 30, 29, 30, 29, 31], // resolved: Jestha 1 = 15 May 2005 (2005 newspaper datelines)
   /* 2063 */ [31, 31, 32, 31, 31, 31, 30, 29, 30, 29, 30, 30],
   /* 2064 */ [31, 31, 32, 32, 31, 30, 30, 29, 30, 29, 30, 30],
   /* 2065 */ [31, 32, 31, 32, 31, 30, 30, 30, 29, 29, 30, 31],

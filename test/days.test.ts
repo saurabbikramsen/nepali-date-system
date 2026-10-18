@@ -9,6 +9,13 @@ import {
   YEAR_START,
 } from "../src/core/days.js";
 import { BAISAKH_1_AD } from "./fixtures/baisakh1.js";
+import { DOCUMENTED_DATES, WEEKDAY_RECORDS } from "./fixtures/documented-dates.js";
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function isoDate(ad: { year: number; month: number; day: number }): string {
+  return `${ad.year}-${String(ad.month).padStart(2, "0")}-${String(ad.day).padStart(2, "0")}`;
+}
 
 describe("month length table", () => {
   it("has 12 months of 29–32 days in every year", () => {
@@ -44,50 +51,41 @@ describe("YEAR_START", () => {
 });
 
 describe("known dates", () => {
-  // BS New Year (Baisakh 1) dates from published calendars
-  const pairs: [bs: [number, number, number], ad: [number, number, number]][] = [
-    [
-      [2000, 1, 1],
-      [1943, 4, 14],
-    ],
-    [
-      [2079, 1, 1],
-      [2022, 4, 14],
-    ],
-    [
-      [2080, 1, 1],
-      [2023, 4, 14],
-    ],
-    [
-      [2081, 1, 1],
-      [2024, 4, 13],
-    ],
-    [
-      [2082, 1, 1],
-      [2025, 4, 14],
-    ],
-    [
-      [2083, 1, 1],
-      [2026, 4, 14],
-    ],
-    [
-      [2083, 6, 26],
-      [2026, 10, 12],
-    ],
-  ];
+  it("documents 20+ dates, including New Year and dates in 32-day months", () => {
+    const newYears = DOCUMENTED_DATES.filter(({ bs: [, month, day] }) => month === 1 && day === 1);
+    const in32DayMonths = DOCUMENTED_DATES.filter(
+      ({ bs: [year, month] }) => MONTH_LENGTHS[year - FIRST_YEAR][month - 1] === 32,
+    );
+    expect(DOCUMENTED_DATES.length).toBeGreaterThanOrEqual(20);
+    expect(newYears).not.toHaveLength(0);
+    expect(in32DayMonths).not.toHaveLength(0);
+  });
 
-  it.each(pairs)("BS %j = AD %j", (bs, ad) => {
-    const days = bsToDays(...bs);
-    expect(adToDays(...ad)).toBe(days);
-    expect(daysToAd(days)).toEqual({ year: ad[0], month: ad[1], day: ad[2] });
-    expect(daysToBs(days)).toEqual({ year: bs[0], month: bs[1], day: bs[2] });
+  it("converts every documented date BS → AD and AD → BS", () => {
+    for (const { bs, ad, event, source } of DOCUMENTED_DATES) {
+      const label = `BS ${bs.join("-")}: ${event} (${source})`;
+      const [year, month, day] = ad.split("-").map(Number);
+      expect(isoDate(daysToAd(bsToDays(...bs))), label).toBe(ad);
+      expect(daysToBs(adToDays(year, month, day)), label).toEqual({
+        year: bs[0],
+        month: bs[1],
+        day: bs[2],
+      });
+    }
   });
 
   it("puts Baisakh 1 of every published year on its recorded AD date", () => {
     for (const [year, expected] of Object.entries(BAISAKH_1_AD)) {
       const ad = daysToAd(bsToDays(Number(year), 1, 1));
-      const actual = `${ad.year}-${String(ad.month).padStart(2, "0")}-${String(ad.day).padStart(2, "0")}`;
-      expect(actual, `Baisakh 1, ${year}`).toBe(expected);
+      expect(isoDate(ad), `Baisakh 1, ${year}`).toBe(expected);
+    }
+  });
+
+  it("matches the weekday written on dated historical documents", () => {
+    for (const { bs, weekday, event, source } of WEEKDAY_RECORDS) {
+      const ad = daysToAd(bsToDays(...bs));
+      const actual = WEEKDAYS[new Date(Date.UTC(ad.year, ad.month - 1, ad.day)).getUTCDay()];
+      expect(actual, `BS ${bs.join("-")}: ${event} (${source})`).toBe(weekday);
     }
   });
 });

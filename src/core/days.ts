@@ -16,6 +16,8 @@ const EPOCH_AD_MS = Date.UTC(
   FIRST_YEAR_START_AD.day,
 );
 
+export const EPOCH_WEEKDAY = new Date(EPOCH_AD_MS).getUTCDay();
+
 /**
  * YEAR_START[i] is the day number of Baisakh 1 of year FIRST_YEAR + i.
  * The last entry is one past the final day in the table.
@@ -39,25 +41,55 @@ function assertInteger(value: number, name: string): void {
   }
 }
 
-/** Converts a BS date to its day number. Throws RangeError for invalid or unsupported dates. */
-export function bsToDays(year: number, month: number, day: number): number {
+function assertSupportedYear(year: number): void {
   assertInteger(year, "year");
-  assertInteger(month, "month");
-  assertInteger(day, "day");
   if (year < FIRST_YEAR || year > LAST_YEAR) {
     throw new RangeError(
       `BS year ${year} is outside the supported range ${FIRST_YEAR}–${LAST_YEAR}`,
     );
   }
+}
+
+/** Days in a BS month (29–32). Throws RangeError for an unsupported year or invalid month. */
+export function daysInMonth(year: number, month: number): number {
+  assertSupportedYear(year);
+  assertInteger(month, "month");
   if (month < 1 || month > 12) {
     throw new RangeError(`month must be 1–12, got ${month}`);
   }
-  const months = MONTH_LENGTHS[year - FIRST_YEAR];
-  const monthLength = months[month - 1];
+  return MONTH_LENGTHS[year - FIRST_YEAR][month - 1];
+}
+
+/** Days in a BS year (365 or 366). Throws RangeError for an unsupported year. */
+export function daysInYear(year: number): number {
+  assertSupportedYear(year);
+  return YEAR_START[year - FIRST_YEAR + 1] - YEAR_START[year - FIRST_YEAR];
+}
+
+/** Whether a BS date exists and is inside the supported range. Never throws. */
+export function isValidBs(year: number, month: number, day: number): boolean {
+  return (
+    Number.isInteger(year) &&
+    Number.isInteger(month) &&
+    Number.isInteger(day) &&
+    year >= FIRST_YEAR &&
+    year <= LAST_YEAR &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= MONTH_LENGTHS[year - FIRST_YEAR][month - 1]
+  );
+}
+
+/** Converts a BS date to its day number. Throws RangeError for invalid or unsupported dates. */
+export function bsToDays(year: number, month: number, day: number): number {
+  const monthLength = daysInMonth(year, month);
+  assertInteger(day, "day");
   if (day < 1 || day > monthLength) {
     throw new RangeError(`day must be 1–${monthLength} for BS ${year}-${month}, got ${day}`);
   }
 
+  const months = MONTH_LENGTHS[year - FIRST_YEAR];
   let days = YEAR_START[year - FIRST_YEAR];
   for (let m = 0; m < month - 1; m++) days += months[m];
   return days + day - 1;
