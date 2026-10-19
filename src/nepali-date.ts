@@ -11,7 +11,7 @@ import {
   TOTAL_DAYS,
   YEAR_START,
 } from "./core/days.js";
-import { daysToStartInstant, instantToDays } from "./core/nepal-time.js";
+import { instantToDays, nepalOffsetMs } from "./core/nepal-time.js";
 import { FIRST_YEAR } from "./defined.js";
 
 /**
@@ -62,6 +62,29 @@ function toEpochMs(instant: Date | string | number): number {
   return ms;
 }
 
+/** Options for reading a moment in time as a date. */
+export interface InstantOptions {
+  /**
+   * A fixed UTC offset in minutes to use instead of Nepal's, positive east of UTC:
+   * 345 for +05:45, -240 for -04:00. This is the opposite sign to Date#getTimezoneOffset.
+   */
+  offsetMinutes?: number;
+}
+
+const MINUTE_MS = 60_000;
+
+/** The offset in ms from InstantOptions, or undefined for Nepal's own offset. */
+function overrideOffsetMs(options: InstantOptions | undefined): number | undefined {
+  const offsetMinutes = options?.offsetMinutes;
+  if (offsetMinutes === undefined) return undefined;
+  if (!Number.isInteger(offsetMinutes) || Math.abs(offsetMinutes) >= 24 * 60) {
+    throw new RangeError(
+      `offsetMinutes must be a whole number of minutes from -1439 to 1439, got ${offsetMinutes}`,
+    );
+  }
+  return offsetMinutes * MINUTE_MS;
+}
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 export class NepaliDate {
@@ -103,18 +126,29 @@ export class NepaliDate {
    * The date in Nepal at a moment in time, whatever the server's time zone. Takes a Date,
    * epoch milliseconds, or an ISO 8601 string with Z or an offset such as
    * "2026-10-18T10:30:00Z" or "2026-10-18T16:15:00+05:45".
+   * Pass `offsetMinutes` to read the date at a fixed UTC offset instead of Nepal's.
    */
-  static fromInstant(instant: Date | string | number): NepaliDate {
+  static fromInstant(instant: Date | string | number, options?: InstantOptions): NepaliDate {
     const ms = toEpochMs(instant);
-    const days = instantToDays(ms);
+    const offsetMs = overrideOffsetMs(options) ?? nepalOffsetMs(ms);
+    const days = instantToDays(ms, offsetMs);
     if (days < 0 || days >= TOTAL_DAYS) {
-      const first = new Date(daysToStartInstant(0)).toISOString();
-      const end = new Date(daysToStartInstant(TOTAL_DAYS)).toISOString();
+      const date = new Date(ms + offsetMs).toISOString().slice(0, 10);
       throw new RangeError(
-        `${new Date(ms).toISOString()} is outside the supported range ${first} to ${end} (exclusive)`,
+        `${new Date(ms).toISOString()} falls on AD ${date}, outside the supported range ` +
+          `${NepaliDate.MIN_DATE.toAdString()} to ${NepaliDate.MAX_DATE.toAdString()}`,
       );
     }
     return NepaliDate.fromDays(days);
+  }
+
+  /**
+   * Today's date in Nepal, whatever the server's time zone. On a UTC server the date
+   * changes at 18:15 UTC. Pass `offsetMinutes` for today's date at another fixed offset.
+   * Throws RangeError after the last supported date (2086-12-30).
+   */
+  static today(options?: InstantOptions): NepaliDate {
+    return NepaliDate.fromInstant(Date.now(), options);
   }
 
   /**

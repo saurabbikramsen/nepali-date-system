@@ -1,5 +1,5 @@
 import { inspect } from "node:util";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
 import { NepaliDate } from "../src/nepali-date.js";
@@ -365,5 +365,84 @@ describe("NepaliDate.fromInstant", () => {
     expect(() => NepaliDate.fromInstant(Number.POSITIVE_INFINITY)).toThrow(RangeError);
     expect(() => NepaliDate.fromInstant(1e20)).toThrow(RangeError);
     expect(() => NepaliDate.fromInstant("2026-13-01T00:00:00Z")).toThrow(RangeError);
+  });
+});
+
+describe("NepaliDate.today", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("changes date at 18:15 UTC, midnight in Nepal", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-17T18:14:59Z"));
+    expect(NepaliDate.today().toString()).toBe("2083-06-31");
+    vi.setSystemTime(new Date("2026-10-17T18:15:00Z"));
+    expect(NepaliDate.today().toString()).toBe("2083-07-01");
+  });
+
+  it("throws after the last supported date", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-04-13T18:15:00Z"));
+    expect(() => NepaliDate.today()).toThrow(RangeError);
+  });
+});
+
+describe("offsetMinutes option", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("changes date at UTC midnight with offset 0", () => {
+    expect(NepaliDate.fromInstant("2026-10-17T23:59:59Z", { offsetMinutes: 0 }).toString()).toBe(
+      "2083-06-31",
+    );
+    expect(NepaliDate.fromInstant("2026-10-18T00:00:00Z", { offsetMinutes: 0 }).toString()).toBe(
+      "2083-07-01",
+    );
+  });
+
+  it("supports offsets west of UTC", () => {
+    // -04:00 (New York in summer): 2026-10-18 starts at 04:00 UTC.
+    const newYork = { offsetMinutes: -240 };
+    expect(NepaliDate.fromInstant("2026-10-18T03:59:59Z", newYork).toString()).toBe("2083-06-31");
+    expect(NepaliDate.fromInstant("2026-10-18T04:00:00Z", newYork).toString()).toBe("2083-07-01");
+  });
+
+  it("uses the fixed offset even where Nepal's offset was different", () => {
+    // Nepal was +05:30 in 1985, so 18:20 UTC was still 30 December there.
+    expect(NepaliDate.fromInstant("1985-12-30T18:20:00Z").toAdString()).toBe("1985-12-30");
+    expect(
+      NepaliDate.fromInstant("1985-12-30T18:20:00Z", { offsetMinutes: 345 }).toAdString(),
+    ).toBe("1985-12-31");
+  });
+
+  it("uses Nepal's offset when options are empty", () => {
+    expect(NepaliDate.fromInstant("2026-10-17T18:15:00Z", {}).toString()).toBe("2083-07-01");
+  });
+
+  it("applies to today()", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-17T20:00:00Z"));
+    expect(NepaliDate.today().toString()).toBe("2083-07-01");
+    expect(NepaliDate.today({ offsetMinutes: 0 }).toString()).toBe("2083-06-31");
+  });
+
+  it("checks the range at the given offset", () => {
+    // The first supported AD date is 1918-04-13, which starts at 1918-04-13T00:00Z in UTC.
+    expect(NepaliDate.fromInstant("1918-04-13T00:00:00Z", { offsetMinutes: 0 })).toEqual(
+      NepaliDate.MIN_DATE,
+    );
+    expect(() => NepaliDate.fromInstant("1918-04-12T23:59:59Z", { offsetMinutes: 0 })).toThrow(
+      /falls on AD 1918-04-12, outside the supported range 1918-04-13 to 2030-04-13/,
+    );
+  });
+
+  it("rejects offsets that aren't whole minutes within a day", () => {
+    for (const offsetMinutes of [5.75, Number.NaN, Number.POSITIVE_INFINITY, 1440, -1440]) {
+      expect(() => NepaliDate.fromInstant(0, { offsetMinutes }), String(offsetMinutes)).toThrow(
+        /offsetMinutes must be a whole number/,
+      );
+    }
   });
 });
