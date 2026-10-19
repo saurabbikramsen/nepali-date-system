@@ -11,6 +11,7 @@ import {
   TOTAL_DAYS,
   YEAR_START,
 } from "./core/days.js";
+import { daysToStartInstant, instantToDays } from "./core/nepal-time.js";
 import { FIRST_YEAR } from "./defined.js";
 
 /**
@@ -28,6 +29,37 @@ function parseYearFirst(text: string, calendar: "BS" | "AD"): [number, number, n
     );
   }
   return [Number(match[1]), Number(match[3]), Number(match[4])];
+}
+
+/**
+ * An ISO 8601 date and time that ends in Z or a ±HH:MM offset. Without an offset, Date.parse
+ * reads the time in the server's own time zone, so the same text would give different dates.
+ */
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** Reads a Date, ISO 8601 string or epoch milliseconds as a UTC timestamp. */
+function toEpochMs(instant: Date | string | number): number {
+  let ms: number;
+  if (typeof instant === "string") {
+    if (!ISO_INSTANT.test(instant)) {
+      const hint = YEAR_FIRST_DATE.test(instant)
+        ? " Use NepaliDate.fromAd for a calendar date."
+        : "";
+      throw new RangeError(
+        `Expected an ISO 8601 time with Z or a ±HH:MM offset like 2026-10-18T10:30:00Z, got ${JSON.stringify(instant)}.${hint}`,
+      );
+    }
+    ms = Date.parse(instant);
+  } else {
+    // new Date() gives NaN for NaN, ±Infinity and numbers outside the Date range.
+    ms = new Date(instant).getTime();
+  }
+  if (Number.isNaN(ms)) {
+    throw new RangeError(
+      `Invalid instant: ${typeof instant === "string" ? JSON.stringify(instant) : String(instant)}`,
+    );
+  }
+  return ms;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -65,6 +97,24 @@ export class NepaliDate {
       return NepaliDate.fromDays(adToDays(...parseYearFirst(yearOrText, "AD")));
     }
     return NepaliDate.fromDays(adToDays(yearOrText, month as number, day as number));
+  }
+
+  /**
+   * The date in Nepal at a moment in time, whatever the server's time zone. Takes a Date,
+   * epoch milliseconds, or an ISO 8601 string with Z or an offset such as
+   * "2026-10-18T10:30:00Z" or "2026-10-18T16:15:00+05:45".
+   */
+  static fromInstant(instant: Date | string | number): NepaliDate {
+    const ms = toEpochMs(instant);
+    const days = instantToDays(ms);
+    if (days < 0 || days >= TOTAL_DAYS) {
+      const first = new Date(daysToStartInstant(0)).toISOString();
+      const end = new Date(daysToStartInstant(TOTAL_DAYS)).toISOString();
+      throw new RangeError(
+        `${new Date(ms).toISOString()} is outside the supported range ${first} to ${end} (exclusive)`,
+      );
+    }
+    return NepaliDate.fromDays(days);
   }
 
   /**

@@ -313,3 +313,57 @@ describe("BS ↔ AD round trip", () => {
     expect(count).toBe(TOTAL_DAYS);
   });
 });
+
+describe("NepaliDate.fromInstant", () => {
+  // Kartik 1, 2083 starts at 2026-10-18 00:00 in Kathmandu, which is 2026-10-17T18:15Z.
+  const KARTIK_1_START = Date.UTC(2026, 9, 17, 18, 15);
+
+  it("gives the date in Nepal for a Date, epoch ms or ISO string", () => {
+    for (const instant of [
+      new Date(KARTIK_1_START),
+      KARTIK_1_START,
+      "2026-10-17T18:15:00Z",
+      "2026-10-17T18:15Z",
+      "2026-10-17T18:15:00.000Z",
+      "2026-10-18T00:00:00+05:45",
+      "2026-10-17T14:15:00-04:00",
+    ]) {
+      expect(NepaliDate.fromInstant(instant).toString(), String(instant)).toBe("2083-07-01");
+    }
+  });
+
+  it("changes date at midnight in Nepal, not UTC", () => {
+    expect(NepaliDate.fromInstant(KARTIK_1_START - 1).toString()).toBe("2083-06-31");
+    expect(NepaliDate.fromInstant("2026-10-17T23:59:59+05:45").toString()).toBe("2083-06-31");
+    expect(NepaliDate.fromInstant("2026-10-18T23:59:59Z").toString()).toBe("2083-07-02");
+  });
+
+  it("uses +05:30 before 1986", () => {
+    expect(NepaliDate.fromInstant("1985-12-30T18:29:59Z").toAdString()).toBe("1985-12-30");
+    expect(NepaliDate.fromInstant("1985-12-30T18:30:00Z").toAdString()).toBe("1985-12-31");
+  });
+
+  it("covers the first and last instant of the table", () => {
+    expect(NepaliDate.fromInstant("1918-04-12T18:18:44Z")).toEqual(NepaliDate.MIN_DATE);
+    expect(NepaliDate.fromInstant("2030-04-13T18:14:59.999Z")).toEqual(NepaliDate.MAX_DATE);
+  });
+
+  it("rejects instants outside the table", () => {
+    expect(() => NepaliDate.fromInstant("1918-04-12T18:18:43.999Z")).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant("2030-04-13T18:15:00Z")).toThrow(RangeError);
+  });
+
+  it("rejects strings without a time zone, pointing calendar dates to fromAd", () => {
+    expect(() => NepaliDate.fromInstant("2026-10-18T10:00:00")).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant("2026-10-18")).toThrow(/NepaliDate\.fromAd/);
+    expect(() => NepaliDate.fromInstant("Sun Oct 18 2026")).toThrow(RangeError);
+  });
+
+  it("rejects invalid instants", () => {
+    expect(() => NepaliDate.fromInstant(new Date("nope"))).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant(Number.NaN)).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant(Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant(1e20)).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant("2026-13-01T00:00:00Z")).toThrow(RangeError);
+  });
+});
