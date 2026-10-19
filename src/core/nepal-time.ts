@@ -37,9 +37,11 @@ export function instantToDays(utcMs: number, offsetMs = nepalOffsetMs(utcMs)): n
  * The UTC timestamp when a day starts in Nepal. Both offset changes happened at local
  * midnight, so the newest offset whose period contains that midnight is the right one.
  * On 1986-01-01, whose first 15 minutes never existed, this gives the moment of the change.
+ * Pass `fixedOffsetMs` to get the start of the day at that offset instead.
  */
-export function daysToStartInstant(days: number): number {
+export function daysToStartInstant(days: number, fixedOffsetMs?: number): number {
   const midnightMs = EPOCH_AD_MS + days * MS_PER_DAY;
+  if (fixedOffsetMs !== undefined) return midnightMs - fixedOffsetMs;
   for (const { since, offsetMs } of OFFSET_CHANGES) {
     if (midnightMs - offsetMs >= since) return midnightMs - offsetMs;
   }

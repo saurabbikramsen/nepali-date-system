@@ -446,3 +446,52 @@ describe("offsetMinutes option", () => {
     }
   });
 });
+
+describe("startInstant", () => {
+  it("gives midnight in Kathmandu as a UTC Date", () => {
+    const start = new NepaliDate(2083, 7, 1).startInstant();
+    expect(start).toBeInstanceOf(Date);
+    expect(start.toISOString()).toBe("2026-10-17T18:15:00.000Z");
+  });
+
+  it("uses +05:30 before 1986 and local mean time before 1920", () => {
+    expect(NepaliDate.fromAd(1985, 12, 31).startInstant().toISOString()).toBe(
+      "1985-12-30T18:30:00.000Z",
+    );
+    expect(NepaliDate.MIN_DATE.startInstant().toISOString()).toBe("1918-04-12T18:18:44.000Z");
+  });
+
+  it("starts 1986-01-01 at 00:15, as 00:00–00:14 never existed", () => {
+    expect(NepaliDate.fromAd(1986, 1, 1).startInstant().toISOString()).toBe(
+      "1985-12-31T18:30:00.000Z",
+    );
+  });
+
+  it("is the first moment of the date for every day in the table", () => {
+    for (let days = 0; days < TOTAL_DAYS; days++) {
+      const date = NepaliDate.fromDays(days);
+      const start = date.startInstant().getTime();
+      const sameDay = NepaliDate.fromInstant(start).toString() === date.toString();
+      const dayBefore =
+        days === 0 || NepaliDate.fromInstant(start - 1).toString() !== date.toString();
+      if (!sameDay || !dayBefore) {
+        expect.fail(`${date.toString()} starts at ${new Date(start).toISOString()}`);
+      }
+    }
+  });
+
+  it("gives midnight at a fixed offset when given one", () => {
+    const date = new NepaliDate(2083, 7, 1); // AD 2026-10-18
+    expect(date.startInstant({ offsetMinutes: 0 }).toISOString()).toBe("2026-10-18T00:00:00.000Z");
+    expect(date.startInstant({ offsetMinutes: -240 }).toISOString()).toBe(
+      "2026-10-18T04:00:00.000Z",
+    );
+    expect(() => date.startInstant({ offsetMinutes: 5.75 })).toThrow(RangeError);
+  });
+
+  it("returns a new Date every time, so changing one doesn't affect the date", () => {
+    const date = new NepaliDate(2083, 7, 1);
+    date.startInstant().setUTCFullYear(2000);
+    expect(date.startInstant().toISOString()).toBe("2026-10-17T18:15:00.000Z");
+  });
+});

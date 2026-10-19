@@ -11,7 +11,7 @@ import {
   TOTAL_DAYS,
   YEAR_START,
 } from "./core/days.js";
-import { instantToDays, nepalOffsetMs } from "./core/nepal-time.js";
+import { daysToStartInstant, instantToDays, nepalOffsetMs } from "./core/nepal-time.js";
 import { FIRST_YEAR } from "./defined.js";
 
 /**
@@ -198,6 +198,14 @@ export class NepaliDate {
   // conversion
   toAd(): DateParts {
     return daysToAd(this.days);
+  }
+  /**
+   * The moment this date starts in Nepal (midnight in Kathmandu), as a Date. Use it as the
+   * lower bound when querying timestamps. Pass `offsetMinutes` for midnight at a fixed UTC
+   * offset instead. Returns a new Date on every call.
+   */
+  startInstant(options?: InstantOptions): Date {
+    return new Date(daysToStartInstant(this.days, overrideOffsetMs(options)));
   }
   toAdString(): string {
     const { year, month, day } = this.toAd();
