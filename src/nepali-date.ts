@@ -71,6 +71,18 @@ export interface InstantOptions {
   offsetMinutes?: number;
 }
 
+/** The calendar periods that NepaliDate#range covers. */
+export type RangeUnit = "day" | "month" | "year";
+
+/**
+ * A half-open span of time: it includes `start` and excludes `end`, which is the start of the
+ * next period. Query with `>= start AND < end`.
+ */
+export interface InstantRange {
+  start: Date;
+  end: Date;
+}
+
 const MINUTE_MS = 60_000;
 
 /** The offset in ms from InstantOptions, or undefined for Nepal's own offset. */
@@ -206,6 +218,37 @@ export class NepaliDate {
    */
   startInstant(options?: InstantOptions): Date {
     return new Date(daysToStartInstant(this.days, overrideOffsetMs(options)));
+  }
+  /**
+   * The span of time covered by the day, month or year containing this date in Nepal, for
+   * querying timestamps: `WHERE created_at >= start AND created_at < end`. `end` is the start
+   * of the next period, so nothing falls between two ranges. An end of 23:59:59 would miss
+   * rows stamped 23:59:59.5. Pass `offsetMinutes` for a fixed UTC offset instead.
+   */
+  range(unit: RangeUnit, options?: InstantOptions): InstantRange {
+    const offsetMs = overrideOffsetMs(options);
+    let first: number;
+    let next: number;
+    switch (unit) {
+      case "day":
+        first = this.days;
+        next = first + 1;
+        break;
+      case "month":
+        first = this.days - this.day + 1;
+        next = first + this.daysInMonth;
+        break;
+      case "year":
+        first = YEAR_START[this.year - FIRST_YEAR];
+        next = YEAR_START[this.year - FIRST_YEAR + 1];
+        break;
+      default:
+        throw new RangeError(`unit must be "day", "month" or "year", got ${JSON.stringify(unit)}`);
+    }
+    return {
+      start: new Date(daysToStartInstant(first, offsetMs)),
+      end: new Date(daysToStartInstant(next, offsetMs)),
+    };
   }
   toAdString(): string {
     const { year, month, day } = this.toAd();

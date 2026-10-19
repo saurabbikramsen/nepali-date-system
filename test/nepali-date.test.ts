@@ -495,3 +495,89 @@ describe("startInstant", () => {
     expect(date.startInstant().toISOString()).toBe("2026-10-17T18:15:00.000Z");
   });
 });
+
+describe("range", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+
+  it("gives a day from midnight to the next midnight in Kathmandu", () => {
+    expect(iso(new NepaliDate(2083, 7, 1).range("day"))).toEqual([
+      "2026-10-17T18:15:00.000Z",
+      "2026-10-18T18:15:00.000Z",
+    ]);
+  });
+
+  it("gives the whole month for any day in it", () => {
+    const kartik = ["2026-10-17T18:15:00.000Z", "2026-11-16T18:15:00.000Z"];
+    expect(iso(new NepaliDate(2083, 7, 1).range("month"))).toEqual(kartik);
+    expect(iso(new NepaliDate(2083, 7, 15).range("month"))).toEqual(kartik);
+    expect(iso(new NepaliDate(2083, 7, 30).range("month"))).toEqual(kartik);
+  });
+
+  it("covers all 32 days of a 32-day month", () => {
+    expect(iso(new NepaliDate(2083, 3, 32).range("month"))).toEqual([
+      "2026-06-14T18:15:00.000Z",
+      "2026-07-16T18:15:00.000Z",
+    ]);
+  });
+
+  it("gives the whole year from Baisakh 1 to the next Baisakh 1", () => {
+    expect(iso(new NepaliDate(2083, 7, 1).range("year"))).toEqual([
+      "2026-04-13T18:15:00.000Z",
+      "2027-04-13T18:15:00.000Z",
+    ]);
+  });
+
+  it("uses each end's own offset across the 1986 change", () => {
+    // BS 2042 started at +05:30 and ended at +05:45.
+    expect(iso(new NepaliDate(2042, 2, 19).range("year"))).toEqual([
+      "1985-04-12T18:30:00.000Z",
+      "1986-04-13T18:15:00.000Z",
+    ]);
+  });
+
+  it("works for the last day, month and year in the table", () => {
+    const end = "2030-04-13T18:15:00.000Z";
+    expect(NepaliDate.MAX_DATE.range("day").end.toISOString()).toBe(end);
+    expect(NepaliDate.MAX_DATE.range("month").end.toISOString()).toBe(end);
+    expect(NepaliDate.MAX_DATE.range("year").end.toISOString()).toBe(end);
+  });
+
+  it("covers exactly the days of every month and year in the table, with no gaps", () => {
+    for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
+      const yearRange = new NepaliDate(year, 1, 1).range("year");
+      let expectedStart = yearRange.start.getTime();
+      for (let month = 1; month <= 12; month++) {
+        const last = NepaliDate.daysInMonth(year, month);
+        const { start, end } = new NepaliDate(year, month, 1).range("month");
+        const label = `${year}-${month}`;
+        expect(start.getTime(), label).toBe(expectedStart);
+        expect(NepaliDate.fromInstant(start).toString(), label).toBe(
+          new NepaliDate(year, month, 1).toString(),
+        );
+        expect(NepaliDate.fromInstant(end.getTime() - 1).toString(), label).toBe(
+          new NepaliDate(year, month, last).toString(),
+        );
+        expectedStart = end.getTime();
+      }
+      expect(yearRange.end.getTime(), String(year)).toBe(expectedStart);
+    }
+  });
+
+  it("uses midnight at a fixed offset when given one", () => {
+    const date = new NepaliDate(2083, 7, 1); // AD 2026-10-18
+    expect(iso(date.range("day", { offsetMinutes: 0 }))).toEqual([
+      "2026-10-18T00:00:00.000Z",
+      "2026-10-19T00:00:00.000Z",
+    ]);
+    expect(() => date.range("day", { offsetMinutes: 5.75 })).toThrow(RangeError);
+  });
+
+  it("rejects unknown units", () => {
+    expect(() => new NepaliDate(2083, 7, 1).range("week" as never)).toThrow(
+      /unit must be "day", "month" or "year", got "week"/,
+    );
+  });
+});
