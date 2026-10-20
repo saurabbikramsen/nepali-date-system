@@ -1,8 +1,8 @@
 import { inspect } from "node:util";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
-import { NepaliDate } from "../src/nepali-date.js";
+import { type InstantRange, NepaliDate } from "../src/nepali-date.js";
 
 describe("NepaliDate construction", () => {
   it("accepts valid dates", () => {
@@ -636,5 +636,53 @@ describe("NepaliDate.rangeBetween", () => {
     expect(() =>
       NepaliDate.rangeBetween(kartik(1), { year: 2083, month: 7, day: 15 } as never),
     ).toThrow(TypeError);
+  });
+});
+
+describe("range formats", () => {
+  const date = new NepaliDate(2083, 7, 1);
+  const START = "2026-10-17T18:15:00.000Z";
+  const END = "2026-10-18T18:15:00.000Z";
+
+  it("gives Dates by default and for as: date", () => {
+    for (const range of [date.range("day"), date.range("day", { as: "date" })]) {
+      expect(range.start).toBeInstanceOf(Date);
+      expect(range.start.toISOString()).toBe(START);
+      expect(range.end.toISOString()).toBe(END);
+    }
+  });
+
+  it("gives ISO strings in UTC for as: iso", () => {
+    expect(date.range("day", { as: "iso" })).toEqual({ start: START, end: END });
+  });
+
+  it("gives epoch milliseconds for as: ms", () => {
+    expect(date.range("day", { as: "ms" })).toEqual({
+      start: Date.parse(START),
+      end: Date.parse(END),
+    });
+  });
+
+  it("works with rangeBetween and offsetMinutes", () => {
+    expect(NepaliDate.rangeBetween(date, date, { as: "iso", offsetMinutes: 0 })).toEqual({
+      start: "2026-10-18T00:00:00.000Z",
+      end: "2026-10-19T00:00:00.000Z",
+    });
+  });
+
+  it("rejects unknown formats", () => {
+    expect(() => date.range("day", { as: "sql" as never })).toThrow(
+      /as must be "date", "iso" or "ms", got "sql"/,
+    );
+  });
+
+  it("tells TypeScript the type of each format", () => {
+    expectTypeOf(date.range("day")).toEqualTypeOf<InstantRange<Date>>();
+    expectTypeOf(date.range("day", { offsetMinutes: 0 })).toEqualTypeOf<InstantRange<Date>>();
+    expectTypeOf(date.range("day", { as: "iso" })).toEqualTypeOf<InstantRange<string>>();
+    expectTypeOf(date.range("month", { as: "ms" })).toEqualTypeOf<InstantRange<number>>();
+    expectTypeOf(NepaliDate.rangeBetween(date, date, { as: "ms" })).toEqualTypeOf<
+      InstantRange<number>
+    >();
   });
 });

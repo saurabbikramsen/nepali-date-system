@@ -75,12 +75,31 @@ export interface InstantOptions {
 export type RangeUnit = "day" | "month" | "year";
 
 /**
+ * How a range gives its bounds: a Date, an ISO 8601 string in UTC such as
+ * "2026-10-17T18:15:00.000Z", or epoch milliseconds.
+ */
+export type InstantFormat = "date" | "iso" | "ms";
+
+/** The type of a range bound for each InstantFormat. */
+export interface InstantFormatTypes {
+  date: Date;
+  iso: string;
+  ms: number;
+}
+
+/** Options for NepaliDate#range and NepaliDate.rangeBetween. */
+export interface RangeOptions<F extends InstantFormat = "date"> extends InstantOptions {
+  /** The type of `start` and `end`: "date" (the default), "iso" or "ms". */
+  as?: F;
+}
+
+/**
  * A half-open span of time: it includes `start` and excludes `end`, which is the start of the
  * next period. Query with `>= start AND < end`.
  */
-export interface InstantRange {
-  start: Date;
-  end: Date;
+export interface InstantRange<T = Date> {
+  start: T;
+  end: T;
 }
 
 const MINUTE_MS = 60_000;
@@ -97,13 +116,32 @@ function overrideOffsetMs(options: InstantOptions | undefined): number | undefin
   return offsetMinutes * MINUTE_MS;
 }
 
+function formatInstant(ms: number, as: InstantFormat): Date | string | number {
+  switch (as) {
+    case "date":
+      return new Date(ms);
+    case "iso":
+      return new Date(ms).toISOString();
+    case "ms":
+      return ms;
+    default:
+      throw new RangeError(`as must be "date", "iso" or "ms", got ${JSON.stringify(as)}`);
+  }
+}
+
 /** The range from the start of day `firstDay` to the start of day `nextDay`. */
-function dayRange(firstDay: number, nextDay: number, options?: InstantOptions): InstantRange {
+function dayRange<F extends InstantFormat>(
+  firstDay: number,
+  nextDay: number,
+  options: RangeOptions<F> | undefined,
+): InstantRange<InstantFormatTypes[F]> {
   const offsetMs = overrideOffsetMs(options);
+  const as = options?.as ?? "date";
+  // TypeScript can't follow the switch in formatInstant back to F, so assert the result type.
   return {
-    start: new Date(daysToStartInstant(firstDay, offsetMs)),
-    end: new Date(daysToStartInstant(nextDay, offsetMs)),
-  };
+    start: formatInstant(daysToStartInstant(firstDay, offsetMs), as),
+    end: formatInstant(daysToStartInstant(nextDay, offsetMs), as),
+  } as InstantRange<InstantFormatTypes[F]>;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -175,9 +213,14 @@ export class NepaliDate {
   /**
    * The span of time from the start of `from` to the end of `to`, both whole days in Nepal and
    * both included. Half-open like NepaliDate#range: query with `>= start AND < end`.
-   * Pass `offsetMinutes` for a fixed UTC offset instead. Throws RangeError if `to` is before `from`.
+   * Pass `offsetMinutes` for a fixed UTC offset instead, and `as` to get the bounds as ISO
+   * strings or epoch ms. Throws RangeError if `to` is before `from`.
    */
-  static rangeBetween(from: NepaliDate, to: NepaliDate, options?: InstantOptions): InstantRange {
+  static rangeBetween<F extends InstantFormat = "date">(
+    from: NepaliDate,
+    to: NepaliDate,
+    options?: RangeOptions<F>,
+  ): InstantRange<InstantFormatTypes[F]> {
     if (!(from instanceof NepaliDate) || !(to instanceof NepaliDate)) {
       throw new TypeError(
         "rangeBetween takes two NepaliDate instances; use NepaliDate.parse for strings",
@@ -249,9 +292,13 @@ export class NepaliDate {
    * The span of time covered by the day, month or year containing this date in Nepal, for
    * querying timestamps: `WHERE created_at >= start AND created_at < end`. `end` is the start
    * of the next period, so nothing falls between two ranges. An end of 23:59:59 would miss
-   * rows stamped 23:59:59.5. Pass `offsetMinutes` for a fixed UTC offset instead.
+   * rows stamped 23:59:59.5. Pass `offsetMinutes` for a fixed UTC offset instead, and `as`
+   * to get the bounds as ISO strings or epoch ms.
    */
-  range(unit: RangeUnit, options?: InstantOptions): InstantRange {
+  range<F extends InstantFormat = "date">(
+    unit: RangeUnit,
+    options?: RangeOptions<F>,
+  ): InstantRange<InstantFormatTypes[F]> {
     let first: number;
     let next: number;
     switch (unit) {
