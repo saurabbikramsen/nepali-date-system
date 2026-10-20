@@ -11,9 +11,9 @@ export interface FormatFields {
 
 /**
  * Text in square brackets, or a token. Longer tokens come first, so MMMM is read before MM.
- * Everything else in a pattern is copied as it is.
+ * Everything else in a pattern is copied as it is. Shared with parsing.
  */
-const TOKEN = /\[([^\]]*)]|YYYY|YY|MMMM|MMM|MM|M|DD|D|dddd|ddd|d/g;
+export const TOKEN = /\[([^\]]*)]|YYYY|YY|MMMM|MMM|MM|M|DD|D|dddd|ddd|d/g;
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 

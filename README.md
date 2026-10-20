@@ -27,7 +27,7 @@ NepaliDate.fromAd(2026, 10, 12).toString(); // "2083-06-26"
 NepaliDate.fromAd("2026-10-12").toString(); // "2083-06-26"
 
 // Read a BS date string
-NepaliDate.parse("2083-06-26"); // also accepts "2083/06/26" and "2083.6.26"
+NepaliDate.parse("2083-06-26"); // also accepts "2083/06/26", "2083.6.26" and "2083 06 26"
 ```
 
 With CommonJS:

@@ -46,6 +46,9 @@ const MONTH_BY_NAME: ReadonlyMap<string, number> = (() => {
   return byName;
 })();
 
+/** Every accepted month spelling, normalized (trimmed, NFC, lowercase). */
+export const MONTH_SPELLINGS: readonly string[] = [...MONTH_BY_NAME.keys()];
+
 /**
  * The month number (1–12) for a month name in any common spelling, English or Nepali, ignoring
  * case: "Asoj", "Ashwin" and "असोज" all give 6. Returns undefined for anything else.

@@ -15,3 +15,4 @@ export type {
 export type { FormatOptions } from "./format.js";
 export type { Locale, LocaleName } from "./locales.js";
 export type { DigitSystem } from "./digits.js";
+export type { ParseOptions } from "./parse.js";

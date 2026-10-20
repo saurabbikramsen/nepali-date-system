@@ -17,20 +17,22 @@ import { daysToStartInstant, instantToDays, nepalOffsetMs } from "./core/nepal-t
 import { FIRST_YEAR } from "./defined.js";
 import { toLatinDigits } from "./digits.js";
 import { formatDate, type FormatOptions } from "./format.js";
+import { getLocale } from "./locales.js";
+import { type ParseOptions, parseWithPattern } from "./parse.js";
 
 /**
  * A 4-digit year, then a month and day of one or two digits, all separated by the same
- * "-", "/" or ".". Year first only: day-first text like 26/06/2083 is ambiguous.
+ * "-", "/", "." or single space. Year first only: day-first text like 26/06/2083 is ambiguous.
  * Matched after Devanagari digits are rewritten as 0–9.
  */
-const YEAR_FIRST_DATE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})$/;
+const YEAR_FIRST_DATE = /^(\d{4})([-/. ])(\d{1,2})\2(\d{1,2})$/;
 
 function parseYearFirst(text: string, calendar: "BS" | "AD"): [number, number, number] {
   const match = YEAR_FIRST_DATE.exec(toLatinDigits(text));
   if (!match) {
     const example = calendar === "BS" ? "2083-06-26" : "2026-10-12";
     throw new RangeError(
-      `Expected a year-first ${calendar} date like ${example} (separated by -, / or .), got ${JSON.stringify(text)}`,
+      `Expected a year-first ${calendar} date like ${example} (separated by -, /, . or a space), got ${JSON.stringify(text)}`,
     );
   }
   return [Number(match[1]), Number(match[3]), Number(match[4])];
@@ -189,7 +191,8 @@ export class NepaliDate {
 
   /**
    * Converts an AD date to BS. Takes numbers, or a year-first string such as
-   * "2026-10-12", "2026/10/12" or "2026.10.12", in 0–9 or Devanagari digits (२०२६-१०-१२).
+   * "2026-10-12", "2026/10/12", "2026.10.12" or "2026 10 12", in 0–9 or Devanagari digits
+   * (२०२६-१०-१२).
    */
   static fromAd(text: string): NepaliDate;
   static fromAd(year: number, month: number, day: number): NepaliDate;
@@ -268,11 +271,38 @@ export class NepaliDate {
   }
 
   /**
-   * Reads a year-first BS date such as "2083-06-26", "2083/06/26" or "2083.6.26", in 0–9 or
-   * Devanagari digits (२०८३-०६-२६). Throws RangeError for any other format or an impossible date.
+   * Reads a year-first BS date such as "2083-06-26", "2083/06/26", "2083.6.26" or "2083 06 26",
+   * with one kind of separator throughout, in 0–9 or Devanagari digits (२०८३-०६-२६).
+   * Throws RangeError for any other format or an impossible date.
    */
-  static parse(text: string): NepaliDate {
-    return new NepaliDate(...parseYearFirst(text, "BS"));
+  static parse(text: string): NepaliDate;
+  /**
+   * Reads a BS date written with a pattern of NepaliDate#format tokens, such as
+   * `parse("26 Asoj 2083", "D MMMM YYYY")`. Month names can be in any common spelling, English
+   * or Nepali, in any case; YY is read as 20YY; digits can be 0–9 or Devanagari. In the
+   * pattern, "-", "/" and "." each match any of the three.
+   *
+   * Strict by default: the whole text must match, MM and DD need two digits, the separators
+   * must all be the same, and a weekday (dddd, ddd or d) must be the date's real weekday.
+   * Pass `{ strict: false }` to relax all four. Throws RangeError if the text doesn't match
+   * or the date is impossible.
+   */
+  static parse(text: string, pattern: string, options?: ParseOptions): NepaliDate;
+  static parse(text: string, pattern?: string, options?: ParseOptions): NepaliDate {
+    // Only a string is a pattern, so dates.map(NepaliDate.parse), which passes an index and the
+    // array as extra arguments, keeps reading year-first dates.
+    if (typeof pattern !== "string") {
+      return new NepaliDate(...parseYearFirst(text, "BS"));
+    }
+    const { year, month, day, weekday } = parseWithPattern(text, pattern, options);
+    const date = new NepaliDate(year, month, day);
+    if (weekday !== undefined && (options?.strict ?? true) && weekday !== date.dayOfWeek) {
+      const names = getLocale("en").weekdays;
+      throw new RangeError(
+        `${JSON.stringify(text)} says ${names[weekday]}, but ${date} is a ${names[date.dayOfWeek]}`,
+      );
+    }
+    return date;
   }
 
   // ----------calendar info----------
