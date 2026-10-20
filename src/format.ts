@@ -1,30 +1,4 @@
-import { MONTH_NAMES } from "./defined.js";
-
-/** The names a format pattern can print. */
-interface FormatNames {
-  months: readonly string[];
-  monthsShort: readonly string[];
-  weekdays: readonly string[];
-  weekdaysShort: readonly string[];
-}
-
-const WEEKDAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-] as const;
-
-const ENGLISH: FormatNames = {
-  months: MONTH_NAMES,
-  // BS months have no official abbreviations. The first three letters keep all twelve distinct.
-  monthsShort: MONTH_NAMES.map((name) => name.slice(0, 3)),
-  weekdays: WEEKDAYS,
-  weekdaysShort: WEEKDAYS.map((name) => name.slice(0, 3)),
-};
+import { getLocale, type LocaleName } from "./locales.js";
 
 /** The fields of a date that a pattern can print. */
 export interface FormatFields {
@@ -42,13 +16,19 @@ const TOKEN = /\[([^\]]*)]|YYYY|YY|MMMM|MMM|MM|M|DD|D|dddd|ddd|d/g;
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
+/** Options for NepaliDate#format. */
+export interface FormatOptions {
+  /** The language for month and weekday names: "en" (the default) or "ne". */
+  locale?: LocaleName;
+}
+
 /** Prints a date with a pattern such as "YYYY-MM-DD" or "dddd, D MMMM YYYY". */
-export function formatDate(fields: FormatFields, pattern: string): string {
+export function formatDate(fields: FormatFields, pattern: string, options?: FormatOptions): string {
   if (typeof pattern !== "string") {
     throw new TypeError(`format pattern must be a string, got ${typeof pattern}`);
   }
   const { year, month, day, dayOfWeek } = fields;
-  const names = ENGLISH;
+  const names = getLocale(options?.locale ?? "en");
   return pattern.replace(TOKEN, (token: string, literal: string | undefined) => {
     if (literal !== undefined) return literal;
     switch (token) {

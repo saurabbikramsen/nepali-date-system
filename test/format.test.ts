@@ -93,3 +93,53 @@ describe("format patterns", () => {
     expect(() => kartik1.format(42 as never)).toThrow(TypeError);
   });
 });
+
+describe("format locales", () => {
+  const ne = { locale: "ne" } as const;
+
+  it.each([
+    ["MMMM", "कार्तिक"],
+    ["MMM", "कार्तिक"],
+    ["dddd", "आइतबार"],
+    ["ddd", "आइत"],
+  ])("ne %s gives %s", (pattern, expected) => {
+    expect(kartik1.format(pattern, ne)).toBe(expected);
+  });
+
+  it("names every month and weekday in Nepali", () => {
+    const months = ["बैशाख", "जेठ", "असार", "साउन", "भदौ", "असोज"];
+    const moreMonths = ["कार्तिक", "मंसिर", "पुस", "माघ", "फागुन", "चैत"];
+    [...months, ...moreMonths].forEach((name, i) => {
+      expect(new NepaliDate(2083, i + 1, 1).format("MMMM", ne)).toBe(name);
+    });
+    const weekdays = ["आइतबार", "सोमबार", "मंगलबार", "बुधबार", "बिहीबार", "शुक्रबार", "शनिबार"];
+    weekdays.forEach((name, offset) => {
+      expect(new NepaliDate(2083, 7, 1 + offset).format("dddd ddd", ne)).toBe(
+        `${name} ${name.replace("बार", "")}`,
+      );
+    });
+  });
+
+  it("keeps numbers as they are", () => {
+    expect(kartik1.format("D MMMM YYYY, dddd", ne)).toBe("1 कार्तिक 2083, आइतबार");
+    expect(kartik1.format("YYYY-MM-DD", ne)).toBe(kartik1.toString());
+  });
+
+  it("prints Nepali text in square brackets", () => {
+    expect(kartik1.format("[आज] dddd", ne)).toBe("आज आइतबार");
+  });
+
+  it("uses English by default", () => {
+    expect(kartik1.format("dddd D MMMM")).toBe("Sunday 1 Kartik");
+    expect(kartik1.format("dddd D MMMM", { locale: "en" })).toBe("Sunday 1 Kartik");
+    expect(kartik1.format("dddd D MMMM", {})).toBe("Sunday 1 Kartik");
+  });
+
+  it("rejects unknown locales", () => {
+    for (const locale of ["np", "hi", "toString", "__proto__"]) {
+      expect(() => kartik1.format("MMMM", { locale: locale as never }), locale).toThrow(
+        /locale must be "en" or "ne"/,
+      );
+    }
+  });
+});

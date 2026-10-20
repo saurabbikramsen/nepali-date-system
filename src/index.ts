@@ -12,3 +12,5 @@ export type {
   RangeOptions,
   RangeUnit,
 } from "./nepali-date.js";
+export type { FormatOptions } from "./format.js";
+export type { Locale, LocaleName } from "./locales.js";

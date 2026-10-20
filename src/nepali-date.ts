@@ -15,7 +15,7 @@ import {
 } from "./core/days.js";
 import { daysToStartInstant, instantToDays, nepalOffsetMs } from "./core/nepal-time.js";
 import { FIRST_YEAR } from "./defined.js";
-import { formatDate } from "./format.js";
+import { formatDate, type FormatOptions } from "./format.js";
 
 /**
  * A 4-digit year, then a month and day of one or two digits, all separated by the same
@@ -380,9 +380,12 @@ export class NepaliDate {
    *
    * Everything else is copied as it is. Letters that are tokens are replaced even inside
    * words, so put words in square brackets: `format("[Today is] dddd")`.
+   *
+   * Pass `{ locale: "ne" }` for Nepali names: `format("D MMMM", { locale: "ne" })` gives
+   * "1 कार्तिक". Nepali month names aren't abbreviated, so MMM prints them in full.
    */
-  format(pattern: string): string {
-    return formatDate(this, pattern);
+  format(pattern: string, options?: FormatOptions): string {
+    return formatDate(this, pattern, options);
   }
   toJSON(): string {
     return this.toString();
