@@ -7,10 +7,10 @@ export interface DateParts {
   day: number;
 }
 
-const MS_PER_DAY = 86_400_000;
+export const MS_PER_DAY = 86_400_000;
 
 /** Day 0 is Baisakh 1 of FIRST_YEAR, as a UTC timestamp. */
-const EPOCH_AD_MS = Date.UTC(
+export const EPOCH_AD_MS = Date.UTC(
   FIRST_YEAR_START_AD.year,
   FIRST_YEAR_START_AD.month - 1,
   FIRST_YEAR_START_AD.day,

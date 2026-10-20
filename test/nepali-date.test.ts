@@ -1,8 +1,8 @@
 import { inspect } from "node:util";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
-import { NepaliDate } from "../src/nepali-date.js";
+import { type InstantRange, NepaliDate } from "../src/nepali-date.js";
 
 describe("NepaliDate construction", () => {
   it("accepts valid dates", () => {
@@ -311,5 +311,449 @@ describe("BS ↔ AD round trip", () => {
     }
 
     expect(count).toBe(TOTAL_DAYS);
+  });
+});
+
+describe("NepaliDate.fromInstant", () => {
+  // Kartik 1, 2083 starts at 2026-10-18 00:00 in Kathmandu, which is 2026-10-17T18:15Z.
+  const KARTIK_1_START = Date.UTC(2026, 9, 17, 18, 15);
+
+  it("gives the date in Nepal for a Date, epoch ms or ISO string", () => {
+    for (const instant of [
+      new Date(KARTIK_1_START),
+      KARTIK_1_START,
+      "2026-10-17T18:15:00Z",
+      "2026-10-17T18:15Z",
+      "2026-10-17T18:15:00.000Z",
+      "2026-10-18T00:00:00+05:45",
+      "2026-10-17T14:15:00-04:00",
+    ]) {
+      expect(NepaliDate.fromInstant(instant).toString(), String(instant)).toBe("2083-07-01");
+    }
+  });
+
+  it("changes date at midnight in Nepal, not UTC", () => {
+    expect(NepaliDate.fromInstant(KARTIK_1_START - 1).toString()).toBe("2083-06-31");
+    expect(NepaliDate.fromInstant("2026-10-17T23:59:59+05:45").toString()).toBe("2083-06-31");
+    expect(NepaliDate.fromInstant("2026-10-18T23:59:59Z").toString()).toBe("2083-07-02");
+  });
+
+  it("uses +05:30 before 1986", () => {
+    expect(NepaliDate.fromInstant("1985-12-30T18:29:59Z").toAdString()).toBe("1985-12-30");
+    expect(NepaliDate.fromInstant("1985-12-30T18:30:00Z").toAdString()).toBe("1985-12-31");
+  });
+
+  it("covers the first and last instant of the table", () => {
+    expect(NepaliDate.fromInstant("1918-04-12T18:18:44Z")).toEqual(NepaliDate.MIN_DATE);
+    expect(NepaliDate.fromInstant("2030-04-13T18:14:59.999Z")).toEqual(NepaliDate.MAX_DATE);
+  });
+
+  it("rejects instants outside the table", () => {
+    expect(() => NepaliDate.fromInstant("1918-04-12T18:18:43.999Z")).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant("2030-04-13T18:15:00Z")).toThrow(RangeError);
+  });
+
+  it("rejects strings without a time zone, pointing calendar dates to fromAd", () => {
+    expect(() => NepaliDate.fromInstant("2026-10-18T10:00:00")).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant("2026-10-18")).toThrow(/NepaliDate\.fromAd/);
+    expect(() => NepaliDate.fromInstant("Sun Oct 18 2026")).toThrow(RangeError);
+  });
+
+  it("rejects invalid instants", () => {
+    expect(() => NepaliDate.fromInstant(new Date("nope"))).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant(Number.NaN)).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant(Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant(1e20)).toThrow(RangeError);
+    expect(() => NepaliDate.fromInstant("2026-13-01T00:00:00Z")).toThrow(RangeError);
+  });
+});
+
+describe("NepaliDate.today", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("changes date at 18:15 UTC, midnight in Nepal", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-17T18:14:59Z"));
+    expect(NepaliDate.today().toString()).toBe("2083-06-31");
+    vi.setSystemTime(new Date("2026-10-17T18:15:00Z"));
+    expect(NepaliDate.today().toString()).toBe("2083-07-01");
+  });
+
+  it("throws after the last supported date", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2030-04-13T18:15:00Z"));
+    expect(() => NepaliDate.today()).toThrow(RangeError);
+  });
+});
+
+describe("offsetMinutes option", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("changes date at UTC midnight with offset 0", () => {
+    expect(NepaliDate.fromInstant("2026-10-17T23:59:59Z", { offsetMinutes: 0 }).toString()).toBe(
+      "2083-06-31",
+    );
+    expect(NepaliDate.fromInstant("2026-10-18T00:00:00Z", { offsetMinutes: 0 }).toString()).toBe(
+      "2083-07-01",
+    );
+  });
+
+  it("supports offsets west of UTC", () => {
+    // -04:00 (New York in summer): 2026-10-18 starts at 04:00 UTC.
+    const newYork = { offsetMinutes: -240 };
+    expect(NepaliDate.fromInstant("2026-10-18T03:59:59Z", newYork).toString()).toBe("2083-06-31");
+    expect(NepaliDate.fromInstant("2026-10-18T04:00:00Z", newYork).toString()).toBe("2083-07-01");
+  });
+
+  it("uses the fixed offset even where Nepal's offset was different", () => {
+    // Nepal was +05:30 in 1985, so 18:20 UTC was still 30 December there.
+    expect(NepaliDate.fromInstant("1985-12-30T18:20:00Z").toAdString()).toBe("1985-12-30");
+    expect(
+      NepaliDate.fromInstant("1985-12-30T18:20:00Z", { offsetMinutes: 345 }).toAdString(),
+    ).toBe("1985-12-31");
+  });
+
+  it("uses Nepal's offset when options are empty", () => {
+    expect(NepaliDate.fromInstant("2026-10-17T18:15:00Z", {}).toString()).toBe("2083-07-01");
+  });
+
+  it("applies to today()", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-17T20:00:00Z"));
+    expect(NepaliDate.today().toString()).toBe("2083-07-01");
+    expect(NepaliDate.today({ offsetMinutes: 0 }).toString()).toBe("2083-06-31");
+  });
+
+  it("checks the range at the given offset", () => {
+    // The first supported AD date is 1918-04-13, which starts at 1918-04-13T00:00Z in UTC.
+    expect(NepaliDate.fromInstant("1918-04-13T00:00:00Z", { offsetMinutes: 0 })).toEqual(
+      NepaliDate.MIN_DATE,
+    );
+    expect(() => NepaliDate.fromInstant("1918-04-12T23:59:59Z", { offsetMinutes: 0 })).toThrow(
+      /falls on AD 1918-04-12, outside the supported range 1918-04-13 to 2030-04-13/,
+    );
+  });
+
+  it("rejects offsets that aren't whole minutes within a day", () => {
+    for (const offsetMinutes of [5.75, Number.NaN, Number.POSITIVE_INFINITY, 1440, -1440]) {
+      expect(() => NepaliDate.fromInstant(0, { offsetMinutes }), String(offsetMinutes)).toThrow(
+        /offsetMinutes must be a whole number/,
+      );
+    }
+  });
+});
+
+describe("startInstant", () => {
+  it("gives midnight in Kathmandu as a UTC Date", () => {
+    const start = new NepaliDate(2083, 7, 1).startInstant();
+    expect(start).toBeInstanceOf(Date);
+    expect(start.toISOString()).toBe("2026-10-17T18:15:00.000Z");
+  });
+
+  it("uses +05:30 before 1986 and local mean time before 1920", () => {
+    expect(NepaliDate.fromAd(1985, 12, 31).startInstant().toISOString()).toBe(
+      "1985-12-30T18:30:00.000Z",
+    );
+    expect(NepaliDate.MIN_DATE.startInstant().toISOString()).toBe("1918-04-12T18:18:44.000Z");
+  });
+
+  it("starts 1986-01-01 at 00:15, as 00:00–00:14 never existed", () => {
+    expect(NepaliDate.fromAd(1986, 1, 1).startInstant().toISOString()).toBe(
+      "1985-12-31T18:30:00.000Z",
+    );
+  });
+
+  it("is the first moment of the date for every day in the table", () => {
+    for (let days = 0; days < TOTAL_DAYS; days++) {
+      const date = NepaliDate.fromDays(days);
+      const start = date.startInstant().getTime();
+      const sameDay = NepaliDate.fromInstant(start).toString() === date.toString();
+      const dayBefore =
+        days === 0 || NepaliDate.fromInstant(start - 1).toString() !== date.toString();
+      if (!sameDay || !dayBefore) {
+        expect.fail(`${date.toString()} starts at ${new Date(start).toISOString()}`);
+      }
+    }
+  });
+
+  it("gives midnight at a fixed offset when given one", () => {
+    const date = new NepaliDate(2083, 7, 1); // AD 2026-10-18
+    expect(date.startInstant({ offsetMinutes: 0 }).toISOString()).toBe("2026-10-18T00:00:00.000Z");
+    expect(date.startInstant({ offsetMinutes: -240 }).toISOString()).toBe(
+      "2026-10-18T04:00:00.000Z",
+    );
+    expect(() => date.startInstant({ offsetMinutes: 5.75 })).toThrow(RangeError);
+  });
+
+  it("returns a new Date every time, so changing one doesn't affect the date", () => {
+    const date = new NepaliDate(2083, 7, 1);
+    date.startInstant().setUTCFullYear(2000);
+    expect(date.startInstant().toISOString()).toBe("2026-10-17T18:15:00.000Z");
+  });
+});
+
+describe("range", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+
+  it("gives a day from midnight to the next midnight in Kathmandu", () => {
+    expect(iso(new NepaliDate(2083, 7, 1).range("day"))).toEqual([
+      "2026-10-17T18:15:00.000Z",
+      "2026-10-18T18:15:00.000Z",
+    ]);
+  });
+
+  it("gives the whole month for any day in it", () => {
+    const kartik = ["2026-10-17T18:15:00.000Z", "2026-11-16T18:15:00.000Z"];
+    expect(iso(new NepaliDate(2083, 7, 1).range("month"))).toEqual(kartik);
+    expect(iso(new NepaliDate(2083, 7, 15).range("month"))).toEqual(kartik);
+    expect(iso(new NepaliDate(2083, 7, 30).range("month"))).toEqual(kartik);
+  });
+
+  it("covers all 32 days of a 32-day month", () => {
+    expect(iso(new NepaliDate(2083, 3, 32).range("month"))).toEqual([
+      "2026-06-14T18:15:00.000Z",
+      "2026-07-16T18:15:00.000Z",
+    ]);
+  });
+
+  it("gives the whole year from Baisakh 1 to the next Baisakh 1", () => {
+    expect(iso(new NepaliDate(2083, 7, 1).range("year"))).toEqual([
+      "2026-04-13T18:15:00.000Z",
+      "2027-04-13T18:15:00.000Z",
+    ]);
+  });
+
+  it("uses each end's own offset across the 1986 change", () => {
+    // BS 2042 started at +05:30 and ended at +05:45.
+    expect(iso(new NepaliDate(2042, 2, 19).range("year"))).toEqual([
+      "1985-04-12T18:30:00.000Z",
+      "1986-04-13T18:15:00.000Z",
+    ]);
+  });
+
+  it("works for the last day, month and year in the table", () => {
+    const end = "2030-04-13T18:15:00.000Z";
+    expect(NepaliDate.MAX_DATE.range("day").end.toISOString()).toBe(end);
+    expect(NepaliDate.MAX_DATE.range("month").end.toISOString()).toBe(end);
+    expect(NepaliDate.MAX_DATE.range("year").end.toISOString()).toBe(end);
+  });
+
+  it("covers exactly the days of every month and year in the table, with no gaps", () => {
+    for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
+      const yearRange = new NepaliDate(year, 1, 1).range("year");
+      let expectedStart = yearRange.start.getTime();
+      for (let month = 1; month <= 12; month++) {
+        const last = NepaliDate.daysInMonth(year, month);
+        const { start, end } = new NepaliDate(year, month, 1).range("month");
+        const label = `${year}-${month}`;
+        expect(start.getTime(), label).toBe(expectedStart);
+        expect(NepaliDate.fromInstant(start).toString(), label).toBe(
+          new NepaliDate(year, month, 1).toString(),
+        );
+        expect(NepaliDate.fromInstant(end.getTime() - 1).toString(), label).toBe(
+          new NepaliDate(year, month, last).toString(),
+        );
+        expectedStart = end.getTime();
+      }
+      expect(yearRange.end.getTime(), String(year)).toBe(expectedStart);
+    }
+  });
+
+  it("uses midnight at a fixed offset when given one", () => {
+    const date = new NepaliDate(2083, 7, 1); // AD 2026-10-18
+    expect(iso(date.range("day", { offsetMinutes: 0 }))).toEqual([
+      "2026-10-18T00:00:00.000Z",
+      "2026-10-19T00:00:00.000Z",
+    ]);
+    expect(() => date.range("day", { offsetMinutes: 5.75 })).toThrow(RangeError);
+  });
+
+  it("rejects unknown units", () => {
+    expect(() => new NepaliDate(2083, 7, 1).range("week" as never)).toThrow(
+      /unit must be "day", "month" or "year", got "week"/,
+    );
+  });
+});
+
+describe("NepaliDate.rangeBetween", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+  const kartik = (day: number) => new NepaliDate(2083, 7, day);
+
+  it("includes both the first and the last day", () => {
+    // Kartik 1–15, 2083 is AD 2026-10-18 to 2026-11-01.
+    expect(iso(NepaliDate.rangeBetween(kartik(1), kartik(15)))).toEqual([
+      "2026-10-17T18:15:00.000Z",
+      "2026-11-01T18:15:00.000Z",
+    ]);
+  });
+
+  it("matches range() for a single day and a whole month", () => {
+    expect(NepaliDate.rangeBetween(kartik(5), kartik(5))).toEqual(kartik(5).range("day"));
+    expect(NepaliDate.rangeBetween(kartik(1), kartik(30))).toEqual(kartik(1).range("month"));
+  });
+
+  it("spans years and Nepal's 1986 offset change", () => {
+    const from = NepaliDate.fromAd(1985, 12, 1);
+    const to = NepaliDate.fromAd(1986, 1, 31);
+    expect(iso(NepaliDate.rangeBetween(from, to))).toEqual([
+      "1985-11-30T18:30:00.000Z",
+      "1986-01-31T18:15:00.000Z",
+    ]);
+  });
+
+  it("covers the whole table", () => {
+    expect(iso(NepaliDate.rangeBetween(NepaliDate.MIN_DATE, NepaliDate.MAX_DATE))).toEqual([
+      "1918-04-12T18:18:44.000Z",
+      "2030-04-13T18:15:00.000Z",
+    ]);
+  });
+
+  it("uses midnight at a fixed offset when given one", () => {
+    expect(iso(NepaliDate.rangeBetween(kartik(1), kartik(2), { offsetMinutes: 0 }))).toEqual([
+      "2026-10-18T00:00:00.000Z",
+      "2026-10-20T00:00:00.000Z",
+    ]);
+  });
+
+  it("rejects a range that ends before it starts", () => {
+    expect(() => NepaliDate.rangeBetween(kartik(15), kartik(1))).toThrow(
+      /from on or before to, got 2083-07-15 and 2083-07-01/,
+    );
+  });
+
+  it("rejects anything but NepaliDate instances", () => {
+    expect(() => NepaliDate.rangeBetween("2083-07-01" as never, kartik(15))).toThrow(TypeError);
+    expect(() =>
+      NepaliDate.rangeBetween(kartik(1), { year: 2083, month: 7, day: 15 } as never),
+    ).toThrow(TypeError);
+  });
+});
+
+describe("range formats", () => {
+  const date = new NepaliDate(2083, 7, 1);
+  const START = "2026-10-17T18:15:00.000Z";
+  const END = "2026-10-18T18:15:00.000Z";
+
+  it("gives Dates by default and for as: date", () => {
+    for (const range of [date.range("day"), date.range("day", { as: "date" })]) {
+      expect(range.start).toBeInstanceOf(Date);
+      expect(range.start.toISOString()).toBe(START);
+      expect(range.end.toISOString()).toBe(END);
+    }
+  });
+
+  it("gives ISO strings in UTC for as: iso", () => {
+    expect(date.range("day", { as: "iso" })).toEqual({ start: START, end: END });
+  });
+
+  it("gives epoch milliseconds for as: ms", () => {
+    expect(date.range("day", { as: "ms" })).toEqual({
+      start: Date.parse(START),
+      end: Date.parse(END),
+    });
+  });
+
+  it("works with rangeBetween and offsetMinutes", () => {
+    expect(NepaliDate.rangeBetween(date, date, { as: "iso", offsetMinutes: 0 })).toEqual({
+      start: "2026-10-18T00:00:00.000Z",
+      end: "2026-10-19T00:00:00.000Z",
+    });
+  });
+
+  it("rejects unknown formats", () => {
+    expect(() => date.range("day", { as: "sql" as never })).toThrow(
+      /as must be "date", "iso" or "ms", got "sql"/,
+    );
+  });
+
+  it("tells TypeScript the type of each format", () => {
+    expectTypeOf(date.range("day")).toEqualTypeOf<InstantRange<Date>>();
+    expectTypeOf(date.range("day", { offsetMinutes: 0 })).toEqualTypeOf<InstantRange<Date>>();
+    expectTypeOf(date.range("day", { as: "iso" })).toEqualTypeOf<InstantRange<string>>();
+    expectTypeOf(date.range("month", { as: "ms" })).toEqualTypeOf<InstantRange<number>>();
+    expectTypeOf(NepaliDate.rangeBetween(date, date, { as: "ms" })).toEqualTypeOf<
+      InstantRange<number>
+    >();
+  });
+});
+
+describe("adRange", () => {
+  it("gives the AD dates of a month, ending on the day after it", () => {
+    expect(new NepaliDate(2083, 6, 10).adRange("month")).toEqual({
+      start: "2026-09-17",
+      end: "2026-10-18",
+    });
+  });
+
+  it("gives a day and a year", () => {
+    const date = new NepaliDate(2083, 7, 1);
+    expect(date.adRange("day")).toEqual({ start: "2026-10-18", end: "2026-10-19" });
+    expect(date.adRange("year")).toEqual({ start: "2026-04-14", end: "2027-04-14" });
+  });
+
+  it("ends the last period in the table on the day after it", () => {
+    const end = "2030-04-14";
+    expect(NepaliDate.MAX_DATE.adRange("day")).toEqual({ start: "2030-04-13", end });
+    expect(NepaliDate.MAX_DATE.adRange("year").end).toBe(end);
+  });
+
+  it("matches the AD dates of every month's first day, back to back", () => {
+    for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
+      for (let month = 1; month <= 12; month++) {
+        const range = new NepaliDate(year, month, 1).adRange("month");
+        expect(range.start, `${year}-${month}`).toBe(new NepaliDate(year, month, 1).toAdString());
+        if (year < LAST_YEAR || month < 12) {
+          const next =
+            month === 12 ? new NepaliDate(year + 1, 1, 1) : new NepaliDate(year, month + 1, 1);
+          expect(range.end, `${year}-${month}`).toBe(next.toAdString());
+        }
+      }
+    }
+  });
+
+  it("gives the same dates as a UTC range, without the times", () => {
+    const date = new NepaliDate(2083, 7, 1);
+    const utc = date.range("month", { as: "iso", offsetMinutes: 0 });
+    expect(date.adRange("month")).toEqual({
+      start: utc.start.slice(0, 10),
+      end: utc.end.slice(0, 10),
+    });
+  });
+
+  it("rejects unknown units", () => {
+    expect(() => new NepaliDate(2083, 7, 1).adRange("week" as never)).toThrow(RangeError);
+  });
+});
+
+describe("NepaliDate.adRangeBetween", () => {
+  const kartik = (day: number) => new NepaliDate(2083, 7, day);
+
+  it("includes both days, ending on the AD date after the last", () => {
+    expect(NepaliDate.adRangeBetween(kartik(1), kartik(15))).toEqual({
+      start: "2026-10-18",
+      end: "2026-11-02",
+    });
+  });
+
+  it("matches adRange for a single day and a whole month", () => {
+    expect(NepaliDate.adRangeBetween(kartik(5), kartik(5))).toEqual(kartik(5).adRange("day"));
+    expect(NepaliDate.adRangeBetween(kartik(1), kartik(30))).toEqual(kartik(1).adRange("month"));
+  });
+
+  it("rejects a reversed range and anything but NepaliDate instances", () => {
+    expect(() => NepaliDate.adRangeBetween(kartik(15), kartik(1))).toThrow(
+      /adRangeBetween needs from on or before to/,
+    );
+    expect(() => NepaliDate.adRangeBetween("2083-07-01" as never, kartik(15))).toThrow(TypeError);
   });
 });
