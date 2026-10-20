@@ -686,3 +686,74 @@ describe("range formats", () => {
     >();
   });
 });
+
+describe("adRange", () => {
+  it("gives the AD dates of a month, ending on the day after it", () => {
+    expect(new NepaliDate(2083, 6, 10).adRange("month")).toEqual({
+      start: "2026-09-17",
+      end: "2026-10-18",
+    });
+  });
+
+  it("gives a day and a year", () => {
+    const date = new NepaliDate(2083, 7, 1);
+    expect(date.adRange("day")).toEqual({ start: "2026-10-18", end: "2026-10-19" });
+    expect(date.adRange("year")).toEqual({ start: "2026-04-14", end: "2027-04-14" });
+  });
+
+  it("ends the last period in the table on the day after it", () => {
+    const end = "2030-04-14";
+    expect(NepaliDate.MAX_DATE.adRange("day")).toEqual({ start: "2030-04-13", end });
+    expect(NepaliDate.MAX_DATE.adRange("year").end).toBe(end);
+  });
+
+  it("matches the AD dates of every month's first day, back to back", () => {
+    for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
+      for (let month = 1; month <= 12; month++) {
+        const range = new NepaliDate(year, month, 1).adRange("month");
+        expect(range.start, `${year}-${month}`).toBe(new NepaliDate(year, month, 1).toAdString());
+        if (year < LAST_YEAR || month < 12) {
+          const next =
+            month === 12 ? new NepaliDate(year + 1, 1, 1) : new NepaliDate(year, month + 1, 1);
+          expect(range.end, `${year}-${month}`).toBe(next.toAdString());
+        }
+      }
+    }
+  });
+
+  it("gives the same dates as a UTC range, without the times", () => {
+    const date = new NepaliDate(2083, 7, 1);
+    const utc = date.range("month", { as: "iso", offsetMinutes: 0 });
+    expect(date.adRange("month")).toEqual({
+      start: utc.start.slice(0, 10),
+      end: utc.end.slice(0, 10),
+    });
+  });
+
+  it("rejects unknown units", () => {
+    expect(() => new NepaliDate(2083, 7, 1).adRange("week" as never)).toThrow(RangeError);
+  });
+});
+
+describe("NepaliDate.adRangeBetween", () => {
+  const kartik = (day: number) => new NepaliDate(2083, 7, day);
+
+  it("includes both days, ending on the AD date after the last", () => {
+    expect(NepaliDate.adRangeBetween(kartik(1), kartik(15))).toEqual({
+      start: "2026-10-18",
+      end: "2026-11-02",
+    });
+  });
+
+  it("matches adRange for a single day and a whole month", () => {
+    expect(NepaliDate.adRangeBetween(kartik(5), kartik(5))).toEqual(kartik(5).adRange("day"));
+    expect(NepaliDate.adRangeBetween(kartik(1), kartik(30))).toEqual(kartik(1).adRange("month"));
+  });
+
+  it("rejects a reversed range and anything but NepaliDate instances", () => {
+    expect(() => NepaliDate.adRangeBetween(kartik(15), kartik(1))).toThrow(
+      /adRangeBetween needs from on or before to/,
+    );
+    expect(() => NepaliDate.adRangeBetween("2083-07-01" as never, kartik(15))).toThrow(TypeError);
+  });
+});

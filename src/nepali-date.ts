@@ -6,8 +6,10 @@ import {
   daysInYear,
   daysToAd,
   daysToBs,
+  EPOCH_AD_MS,
   EPOCH_WEEKDAY,
   isValidBs,
+  MS_PER_DAY,
   TOTAL_DAYS,
   YEAR_START,
 } from "./core/days.js";
@@ -129,6 +131,20 @@ function formatInstant(ms: number, as: InstantFormat): Date | string | number {
   }
 }
 
+/**
+ * A half-open span of AD calendar dates as YYYY-MM-DD strings, for DATE columns: it includes
+ * `start` and excludes `end`, the day after the last one. Query with `>= start AND < end`.
+ */
+export interface AdDateRange {
+  start: string;
+  end: string;
+}
+
+/** The AD date of a day number as YYYY-MM-DD. Works one past the table too, for range ends. */
+function adDateString(days: number): string {
+  return new Date(EPOCH_AD_MS + days * MS_PER_DAY).toISOString().slice(0, 10);
+}
+
 /** The range from the start of day `firstDay` to the start of day `nextDay`. */
 function dayRange<F extends InstantFormat>(
   firstDay: number,
@@ -221,15 +237,31 @@ export class NepaliDate {
     to: NepaliDate,
     options?: RangeOptions<F>,
   ): InstantRange<InstantFormatTypes[F]> {
+    const [first, next] = NepaliDate.spanDays(from, to, "rangeBetween");
+    return dayRange(first, next, options);
+  }
+
+  /**
+   * The AD dates from `from` to `to`, both included, for DATE columns: `start` is the AD date
+   * of `from` and `end` the day after `to`, so query with `>= start AND < end`. No time zone
+   * is involved. Throws RangeError if `to` is before `from`.
+   */
+  static adRangeBetween(from: NepaliDate, to: NepaliDate): AdDateRange {
+    const [first, next] = NepaliDate.spanDays(from, to, "adRangeBetween");
+    return { start: adDateString(first), end: adDateString(next) };
+  }
+
+  /** Day numbers of `from` and of the day after `to`, after checking both. */
+  private static spanDays(from: NepaliDate, to: NepaliDate, method: string): [number, number] {
     if (!(from instanceof NepaliDate) || !(to instanceof NepaliDate)) {
       throw new TypeError(
-        "rangeBetween takes two NepaliDate instances; use NepaliDate.parse for strings",
+        `${method} takes two NepaliDate instances; use NepaliDate.parse for strings`,
       );
     }
     if (to.days < from.days) {
-      throw new RangeError(`rangeBetween needs from on or before to, got ${from} and ${to}`);
+      throw new RangeError(`${method} needs from on or before to, got ${from} and ${to}`);
     }
-    return dayRange(from.days, to.days + 1, options);
+    return [from.days, to.days + 1];
   }
 
   /**
@@ -299,25 +331,32 @@ export class NepaliDate {
     unit: RangeUnit,
     options?: RangeOptions<F>,
   ): InstantRange<InstantFormatTypes[F]> {
-    let first: number;
-    let next: number;
+    const [first, next] = this.periodDays(unit);
+    return dayRange(first, next, options);
+  }
+  /**
+   * The AD dates of the day, month or year containing this date, for DATE columns:
+   * `WHERE sale_date >= start AND sale_date < end`. `end` is the AD date after the period's
+   * last day. No time zone is involved, so the server's zone can't shift the dates.
+   */
+  adRange(unit: RangeUnit): AdDateRange {
+    const [first, next] = this.periodDays(unit);
+    return { start: adDateString(first), end: adDateString(next) };
+  }
+  /** Day numbers of the first day of the period containing this date and of the day after it. */
+  private periodDays(unit: RangeUnit): [number, number] {
     switch (unit) {
       case "day":
-        first = this.days;
-        next = first + 1;
-        break;
-      case "month":
-        first = this.days - this.day + 1;
-        next = first + this.daysInMonth;
-        break;
+        return [this.days, this.days + 1];
+      case "month": {
+        const first = this.days - this.day + 1;
+        return [first, first + this.daysInMonth];
+      }
       case "year":
-        first = YEAR_START[this.year - FIRST_YEAR];
-        next = YEAR_START[this.year - FIRST_YEAR + 1];
-        break;
+        return [YEAR_START[this.year - FIRST_YEAR], YEAR_START[this.year - FIRST_YEAR + 1]];
       default:
         throw new RangeError(`unit must be "day", "month" or "year", got ${JSON.stringify(unit)}`);
     }
-    return dayRange(first, next, options);
   }
   toAdString(): string {
     const { year, month, day } = this.toAd();

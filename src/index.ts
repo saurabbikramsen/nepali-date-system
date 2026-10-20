@@ -4,6 +4,7 @@ export { MONTH_NAMES, FIRST_YEAR, LAST_YEAR, LAST_OFFICIAL_YEAR } from "./define
 export type { MonthName } from "./defined.js";
 export type { DateParts } from "./core/days.js";
 export type {
+  AdDateRange,
   InstantFormat,
   InstantFormatTypes,
   InstantOptions,
