@@ -15,6 +15,7 @@ import {
 } from "./core/days.js";
 import { daysToStartInstant, instantToDays, nepalOffsetMs } from "./core/nepal-time.js";
 import { FIRST_YEAR } from "./defined.js";
+import { formatDate } from "./format.js";
 
 /**
  * A 4-digit year, then a month and day of one or two digits, all separated by the same
@@ -364,6 +365,24 @@ export class NepaliDate {
   }
   toString(): string {
     return `${this.year}-${pad2(this.month)}-${pad2(this.day)}`;
+  }
+  /**
+   * Prints this date with a pattern of tokens:
+   *
+   * | Token  | Output             | Token  | Output              |
+   * | ------ | ------------------ | ------ | ------------------- |
+   * | `YYYY` | 2083               | `DD`   | 01–32               |
+   * | `YY`   | 83                 | `D`    | 1–32                |
+   * | `MMMM` | Baisakh … Chaitra  | `dddd` | Sunday … Saturday   |
+   * | `MMM`  | Bai … Cha          | `ddd`  | Sun … Sat           |
+   * | `MM`   | 01–12              | `d`    | 0–6 (0 = Sunday)    |
+   * | `M`    | 1–12               | `[…]`  | its text, as is     |
+   *
+   * Everything else is copied as it is. Letters that are tokens are replaced even inside
+   * words, so put words in square brackets: `format("[Today is] dddd")`.
+   */
+  format(pattern: string): string {
+    return formatDate(this, pattern);
   }
   toJSON(): string {
     return this.toString();
