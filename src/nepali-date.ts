@@ -97,6 +97,15 @@ function overrideOffsetMs(options: InstantOptions | undefined): number | undefin
   return offsetMinutes * MINUTE_MS;
 }
 
+/** The range from the start of day `firstDay` to the start of day `nextDay`. */
+function dayRange(firstDay: number, nextDay: number, options?: InstantOptions): InstantRange {
+  const offsetMs = overrideOffsetMs(options);
+  return {
+    start: new Date(daysToStartInstant(firstDay, offsetMs)),
+    end: new Date(daysToStartInstant(nextDay, offsetMs)),
+  };
+}
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 export class NepaliDate {
@@ -164,6 +173,23 @@ export class NepaliDate {
   }
 
   /**
+   * The span of time from the start of `from` to the end of `to`, both whole days in Nepal and
+   * both included. Half-open like NepaliDate#range: query with `>= start AND < end`.
+   * Pass `offsetMinutes` for a fixed UTC offset instead. Throws RangeError if `to` is before `from`.
+   */
+  static rangeBetween(from: NepaliDate, to: NepaliDate, options?: InstantOptions): InstantRange {
+    if (!(from instanceof NepaliDate) || !(to instanceof NepaliDate)) {
+      throw new TypeError(
+        "rangeBetween takes two NepaliDate instances; use NepaliDate.parse for strings",
+      );
+    }
+    if (to.days < from.days) {
+      throw new RangeError(`rangeBetween needs from on or before to, got ${from} and ${to}`);
+    }
+    return dayRange(from.days, to.days + 1, options);
+  }
+
+  /**
    * Reads a year-first BS date such as "2083-06-26", "2083/06/26" or "2083.6.26".
    * Throws RangeError for any other format or an impossible date.
    */
@@ -226,7 +252,6 @@ export class NepaliDate {
    * rows stamped 23:59:59.5. Pass `offsetMinutes` for a fixed UTC offset instead.
    */
   range(unit: RangeUnit, options?: InstantOptions): InstantRange {
-    const offsetMs = overrideOffsetMs(options);
     let first: number;
     let next: number;
     switch (unit) {
@@ -245,10 +270,7 @@ export class NepaliDate {
       default:
         throw new RangeError(`unit must be "day", "month" or "year", got ${JSON.stringify(unit)}`);
     }
-    return {
-      start: new Date(daysToStartInstant(first, offsetMs)),
-      end: new Date(daysToStartInstant(next, offsetMs)),
-    };
+    return dayRange(first, next, options);
   }
   toAdString(): string {
     const { year, month, day } = this.toAd();

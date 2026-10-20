@@ -581,3 +581,60 @@ describe("range", () => {
     );
   });
 });
+
+describe("NepaliDate.rangeBetween", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+  const kartik = (day: number) => new NepaliDate(2083, 7, day);
+
+  it("includes both the first and the last day", () => {
+    // Kartik 1–15, 2083 is AD 2026-10-18 to 2026-11-01.
+    expect(iso(NepaliDate.rangeBetween(kartik(1), kartik(15)))).toEqual([
+      "2026-10-17T18:15:00.000Z",
+      "2026-11-01T18:15:00.000Z",
+    ]);
+  });
+
+  it("matches range() for a single day and a whole month", () => {
+    expect(NepaliDate.rangeBetween(kartik(5), kartik(5))).toEqual(kartik(5).range("day"));
+    expect(NepaliDate.rangeBetween(kartik(1), kartik(30))).toEqual(kartik(1).range("month"));
+  });
+
+  it("spans years and Nepal's 1986 offset change", () => {
+    const from = NepaliDate.fromAd(1985, 12, 1);
+    const to = NepaliDate.fromAd(1986, 1, 31);
+    expect(iso(NepaliDate.rangeBetween(from, to))).toEqual([
+      "1985-11-30T18:30:00.000Z",
+      "1986-01-31T18:15:00.000Z",
+    ]);
+  });
+
+  it("covers the whole table", () => {
+    expect(iso(NepaliDate.rangeBetween(NepaliDate.MIN_DATE, NepaliDate.MAX_DATE))).toEqual([
+      "1918-04-12T18:18:44.000Z",
+      "2030-04-13T18:15:00.000Z",
+    ]);
+  });
+
+  it("uses midnight at a fixed offset when given one", () => {
+    expect(iso(NepaliDate.rangeBetween(kartik(1), kartik(2), { offsetMinutes: 0 }))).toEqual([
+      "2026-10-18T00:00:00.000Z",
+      "2026-10-20T00:00:00.000Z",
+    ]);
+  });
+
+  it("rejects a range that ends before it starts", () => {
+    expect(() => NepaliDate.rangeBetween(kartik(15), kartik(1))).toThrow(
+      /from on or before to, got 2083-07-15 and 2083-07-01/,
+    );
+  });
+
+  it("rejects anything but NepaliDate instances", () => {
+    expect(() => NepaliDate.rangeBetween("2083-07-01" as never, kartik(15))).toThrow(TypeError);
+    expect(() =>
+      NepaliDate.rangeBetween(kartik(1), { year: 2083, month: 7, day: 15 } as never),
+    ).toThrow(TypeError);
+  });
+});
