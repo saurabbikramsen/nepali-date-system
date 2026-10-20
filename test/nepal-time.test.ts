@@ -103,3 +103,17 @@ describe("daysToStartInstant", () => {
     }
   });
 });
+
+describe("test environment", () => {
+  it("runs in the time zone set by TZ, so the CI matrix really changes zones", () => {
+    const tz = process.env.TZ;
+    if (!tz) return;
+    // Winter and summer, to catch zones with daylight saving time.
+    for (const iso of ["2026-01-15T12:00:00Z", "2026-07-15T12:00:00Z"]) {
+      const instant = new Date(iso);
+      expect(instant.toLocaleString("en-US"), iso).toBe(
+        instant.toLocaleString("en-US", { timeZone: tz }),
+      );
+    }
+  });
+});
