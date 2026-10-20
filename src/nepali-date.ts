@@ -15,16 +15,18 @@ import {
 } from "./core/days.js";
 import { daysToStartInstant, instantToDays, nepalOffsetMs } from "./core/nepal-time.js";
 import { FIRST_YEAR } from "./defined.js";
+import { toLatinDigits } from "./digits.js";
 import { formatDate, type FormatOptions } from "./format.js";
 
 /**
  * A 4-digit year, then a month and day of one or two digits, all separated by the same
  * "-", "/" or ".". Year first only: day-first text like 26/06/2083 is ambiguous.
+ * Matched after Devanagari digits are rewritten as 0–9.
  */
 const YEAR_FIRST_DATE = /^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})$/;
 
 function parseYearFirst(text: string, calendar: "BS" | "AD"): [number, number, number] {
-  const match = YEAR_FIRST_DATE.exec(text);
+  const match = YEAR_FIRST_DATE.exec(toLatinDigits(text));
   if (!match) {
     const example = calendar === "BS" ? "2083-06-26" : "2026-10-12";
     throw new RangeError(
@@ -45,7 +47,7 @@ function toEpochMs(instant: Date | string | number): number {
   let ms: number;
   if (typeof instant === "string") {
     if (!ISO_INSTANT.test(instant)) {
-      const hint = YEAR_FIRST_DATE.test(instant)
+      const hint = YEAR_FIRST_DATE.test(toLatinDigits(instant))
         ? " Use NepaliDate.fromAd for a calendar date."
         : "";
       throw new RangeError(
@@ -187,7 +189,7 @@ export class NepaliDate {
 
   /**
    * Converts an AD date to BS. Takes numbers, or a year-first string such as
-   * "2026-10-12", "2026/10/12" or "2026.10.12".
+   * "2026-10-12", "2026/10/12" or "2026.10.12", in 0–9 or Devanagari digits (२०२६-१०-१२).
    */
   static fromAd(text: string): NepaliDate;
   static fromAd(year: number, month: number, day: number): NepaliDate;
@@ -266,8 +268,8 @@ export class NepaliDate {
   }
 
   /**
-   * Reads a year-first BS date such as "2083-06-26", "2083/06/26" or "2083.6.26".
-   * Throws RangeError for any other format or an impossible date.
+   * Reads a year-first BS date such as "2083-06-26", "2083/06/26" or "2083.6.26", in 0–9 or
+   * Devanagari digits (२०८३-०६-२६). Throws RangeError for any other format or an impossible date.
    */
   static parse(text: string): NepaliDate {
     return new NepaliDate(...parseYearFirst(text, "BS"));
@@ -381,8 +383,10 @@ export class NepaliDate {
    * Everything else is copied as it is. Letters that are tokens are replaced even inside
    * words, so put words in square brackets: `format("[Today is] dddd")`.
    *
-   * Pass `{ locale: "ne" }` for Nepali names: `format("D MMMM", { locale: "ne" })` gives
-   * "1 कार्तिक". Nepali month names aren't abbreviated, so MMM prints them in full.
+   * Pass `{ locale: "ne" }` for Nepali names and digits: `format("D MMMM", { locale: "ne" })`
+   * gives "१ कार्तिक". Nepali month names aren't abbreviated, so MMM prints them in full.
+   * Pass `digits` to choose the digits separately: `{ locale: "ne", digits: "latin" }` gives
+   * "1 कार्तिक", and `{ digits: "devanagari" }` with YYYY-MM-DD gives "२०८३-०७-०१".
    */
   format(pattern: string, options?: FormatOptions): string {
     return formatDate(this, pattern, options);

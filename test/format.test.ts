@@ -120,9 +120,9 @@ describe("format locales", () => {
     });
   });
 
-  it("keeps numbers as they are", () => {
-    expect(kartik1.format("D MMMM YYYY, dddd", ne)).toBe("1 कार्तिक 2083, आइतबार");
-    expect(kartik1.format("YYYY-MM-DD", ne)).toBe(kartik1.toString());
+  it("uses Devanagari digits by default", () => {
+    expect(kartik1.format("D MMMM YYYY, dddd", ne)).toBe("१ कार्तिक २०८३, आइतबार");
+    expect(kartik1.format("YYYY-MM-DD", ne)).toBe("२०८३-०७-०१");
   });
 
   it("prints Nepali text in square brackets", () => {
@@ -141,5 +141,79 @@ describe("format locales", () => {
         /locale must be "en" or "ne"/,
       );
     }
+  });
+});
+
+describe("format digits", () => {
+  const devanagari = { digits: "devanagari" } as const;
+
+  it.each([
+    ["YYYY", "२०८३"],
+    ["YY", "८३"],
+    ["MM", "०७"],
+    ["M", "७"],
+    ["DD", "०१"],
+    ["D", "१"],
+    ["d", "०"],
+  ])("devanagari %s gives %s", (pattern, expected) => {
+    expect(kartik1.format(pattern, devanagari)).toBe(expected);
+  });
+
+  it("writes every digit", () => {
+    expect(new NepaliDate(2083, 12, 30).format("YYYY-MM-DD", devanagari)).toBe("२०८३-१२-३०");
+    expect(new NepaliDate(1975, 4, 5).format("YYYY M D", devanagari)).toBe("१९७५ ४ ५");
+    expect(new NepaliDate(2068, 9, 7).format("YYYY M D", devanagari)).toBe("२०६८ ९ ७");
+  });
+
+  it("chooses digits separately from the locale", () => {
+    expect(kartik1.format("D MMMM YYYY", devanagari)).toBe("१ Kartik २०८३");
+    expect(kartik1.format("D MMMM YYYY", { locale: "ne", digits: "latin" })).toBe("1 कार्तिक 2083");
+    expect(kartik1.format("D MMMM YYYY", { digits: "latin" })).toBe("1 Kartik 2083");
+  });
+
+  it("leaves digits in square brackets as they are", () => {
+    expect(kartik1.format("[2083] YYYY", devanagari)).toBe("2083 २०८३");
+    expect(kartik1.format("[२०८३] YYYY", { digits: "latin" })).toBe("२०८३ 2083");
+  });
+
+  it("parses back what it formats, for every day in the table", () => {
+    for (let days = 0; days < TOTAL_DAYS; days++) {
+      const date = NepaliDate.fromDays(days);
+      const text = date.format("YYYY-MM-DD", devanagari);
+      if (NepaliDate.parse(text).toString() !== date.toString()) {
+        expect.fail(`${date.toString()} → ${text} → ${NepaliDate.parse(text).toString()}`);
+      }
+    }
+  });
+
+  it("rejects unknown digit systems", () => {
+    expect(() => kartik1.format("YYYY", { digits: "arabic" as never })).toThrow(
+      /digits must be "latin" or "devanagari", got "arabic"/,
+    );
+  });
+});
+
+describe("Devanagari digits as input", () => {
+  it("parses BS dates with any separator and padding", () => {
+    expect(NepaliDate.parse("२०८३-०६-२६").toString()).toBe("2083-06-26");
+    expect(NepaliDate.parse("२०८३/६/२६").toString()).toBe("2083-06-26");
+    expect(NepaliDate.parse("२०८३.०६.२६").toString()).toBe("2083-06-26");
+  });
+
+  it("accepts a mix of Devanagari and 0–9 digits", () => {
+    expect(NepaliDate.parse("२०८३-06-26").toString()).toBe("2083-06-26");
+  });
+
+  it("converts AD dates written in Devanagari", () => {
+    expect(NepaliDate.fromAd("२०२६-१०-१२").toString()).toBe("2083-06-26");
+  });
+
+  it("quotes the original text when a date is impossible or badly formed", () => {
+    expect(() => NepaliDate.parse("२०८३-०६-३२")).toThrow(RangeError);
+    expect(() => NepaliDate.parse("२६/०६/२०८३")).toThrow(/got "२६\/०६\/२०८३"/);
+  });
+
+  it("points a Devanagari date given to fromInstant to fromAd", () => {
+    expect(() => NepaliDate.fromInstant("२०२६-१०-१८")).toThrow(/NepaliDate\.fromAd/);
   });
 });

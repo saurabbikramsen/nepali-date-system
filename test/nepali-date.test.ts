@@ -238,6 +238,7 @@ describe("NepaliDate.parse", () => {
     ["2083-6-26", "2083-06-26"], // month not zero-padded
     ["2083/6/5", "2083-06-05"], // neither padded
     ["2083.12.30", "2083-12-30"],
+    ["२०८३-०६-२६", "2083-06-26"], // Devanagari digits
   ])("accepts %j", (text, expected) => {
     expect(NepaliDate.parse(text).toString()).toBe(expected);
   });
@@ -256,7 +257,7 @@ describe("NepaliDate.parse", () => {
     " 2083-06-26", // surrounding whitespace
     "2083-06-26 ",
     "2083-06-26T00:00:00Z", // timestamp
-    "२०८३-०६-२६", // Devanagari digits
+    "٢٠٨٣-٠٦-٢٦", // Arabic-Indic digits: only 0–9 and Devanagari are read
     "",
     "not a date",
   ])("rejects the format %j", (text) => {

@@ -1,10 +1,15 @@
 import { MONTH_NAMES } from "./defined.js";
+import type { DigitSystem } from "./digits.js";
 
 /** The languages that NepaliDate#format can print names in. */
 export type LocaleName = "en" | "ne";
 
-/** Month and weekday names for one language. Months start at Baisakh, weekdays at Sunday. */
+/**
+ * Names and digits for one language. Months start at Baisakh, weekdays at Sunday. `digits` is
+ * what NepaliDate#format uses unless it's given `digits` itself.
+ */
 export interface Locale {
+  digits: DigitSystem;
   months: readonly string[];
   monthsShort: readonly string[];
   weekdays: readonly string[];
@@ -42,6 +47,7 @@ const NEPALI_MONTHS = [
  */
 export const LOCALES: Readonly<Record<LocaleName, Locale>> = {
   en: {
+    digits: "latin",
     months: MONTH_NAMES,
     // BS months have no official abbreviations. The first three letters keep all twelve distinct.
     monthsShort: MONTH_NAMES.map((name) => name.slice(0, 3)),
@@ -49,6 +55,7 @@ export const LOCALES: Readonly<Record<LocaleName, Locale>> = {
     weekdaysShort: ENGLISH_WEEKDAYS.map((name) => name.slice(0, 3)),
   },
   ne: {
+    digits: "devanagari",
     months: NEPALI_MONTHS,
     // Nepali month names are short and aren't usually abbreviated, so MMM prints them in full.
     monthsShort: NEPALI_MONTHS,
