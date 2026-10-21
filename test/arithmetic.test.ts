@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
+import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
 import { NepaliDate } from "../src/nepali-date.js";
 
 const bs = (text: string) => NepaliDate.parse(text);
@@ -98,5 +99,99 @@ describe("addWeeks", () => {
   it("rejects results outside the table and amounts that aren't whole numbers", () => {
     expect(() => NepaliDate.MAX_DATE.addWeeks(1)).toThrow(/plus 1 week is outside/);
     expect(() => bs("2083-07-01").addWeeks(0.5)).toThrow(/weeks must be a whole number, got 0.5/);
+  });
+});
+
+describe("addMonths", () => {
+  it("keeps the day when the new month is long enough", () => {
+    expect(bs("2083-07-15").addMonths(1).toString()).toBe("2083-08-15");
+    expect(bs("2083-07-15").addMonths(-3).toString()).toBe("2083-04-15");
+  });
+
+  it("moves to the last day when the new month is shorter", () => {
+    // The roadmap's example: Bhadra 2056 has 32 days, Aswin 2056 has 30.
+    expect(bs("2056-05-32").addMonths(1).toString()).toBe("2056-06-30");
+    expect(bs("2083-07-30").addMonths(1).toString()).toBe("2083-08-29"); // Mangsir has 29
+    expect(bs("2083-03-32").addMonths(-1).toString()).toBe("2083-02-31"); // Jestha has 31
+  });
+
+  it("crosses year ends in both directions", () => {
+    expect(bs("2083-12-15").addMonths(1).toString()).toBe("2084-01-15");
+    expect(bs("2083-01-15").addMonths(-1).toString()).toBe("2082-12-15");
+    expect(bs("2083-07-15").addMonths(25).toString()).toBe("2085-08-15");
+    expect(bs("2083-07-15").addMonths(-25).toString()).toBe("2081-06-15");
+  });
+
+  it("doesn't undo itself after moving to a shorter month", () => {
+    expect(bs("2056-05-32").addMonths(1).addMonths(-1).toString()).toBe("2056-05-30");
+  });
+
+  it("gives the next month and the right day for every day in the table", () => {
+    for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
+      for (let month = 1; month <= 12; month++) {
+        if (year === LAST_YEAR && month === 12) continue;
+        const nextYear = month === 12 ? year + 1 : year;
+        const nextMonth = month === 12 ? 1 : month + 1;
+        const nextLength = NepaliDate.daysInMonth(nextYear, nextMonth);
+        for (let day = 1; day <= NepaliDate.daysInMonth(year, month); day++) {
+          const result = new NepaliDate(year, month, day).addMonths(1);
+          if (
+            result.year !== nextYear ||
+            result.month !== nextMonth ||
+            result.day !== Math.min(day, nextLength)
+          ) {
+            expect.fail(`${year}-${month}-${day} + 1 month gave ${result}`);
+          }
+        }
+      }
+    }
+  });
+
+  it("returns an equal date for 0 and leaves the original unchanged", () => {
+    const date = bs("2083-07-01");
+    expect(date.addMonths(0)).toEqual(date);
+    date.addMonths(3);
+    expect(date.toString()).toBe("2083-07-01");
+  });
+
+  it("rejects results outside the table and amounts that aren't whole numbers", () => {
+    expect(() => NepaliDate.MAX_DATE.addMonths(1)).toThrow(
+      /2086-12-30 plus 1 month is outside the supported range/,
+    );
+    expect(() => NepaliDate.MIN_DATE.addMonths(-1)).toThrow(/plus -1 month is outside/);
+    expect(() => bs("2083-07-01").addMonths(1.5)).toThrow(/months must be a whole number/);
+    expect(() => bs("2083-07-01").addMonths(Number.NaN)).toThrow(/months must be a whole number/);
+  });
+});
+
+describe("addYears", () => {
+  it("keeps the month and day when they exist", () => {
+    expect(bs("2083-07-15").addYears(1).toString()).toBe("2084-07-15");
+    expect(bs("2083-07-15").addYears(-10).toString()).toBe("2073-07-15");
+  });
+
+  it("moves to the month's last day when the new year's month is shorter", () => {
+    // Asar has 32 days in 2082 but 31 in 2081.
+    expect(bs("2082-03-32").addYears(-1).toString()).toBe("2081-03-31");
+  });
+
+  it("matches addMonths with twelve times the amount", () => {
+    const date = bs("2056-05-32");
+    for (let years = -50; years <= 30; years++) {
+      expect(date.addYears(years), String(years)).toEqual(date.addMonths(years * 12));
+    }
+  });
+
+  it("reaches the first and last years of the table", () => {
+    expect(bs("2083-07-01").addYears(FIRST_YEAR - 2083).year).toBe(FIRST_YEAR);
+    expect(bs("2083-07-01").addYears(LAST_YEAR - 2083).year).toBe(LAST_YEAR);
+  });
+
+  it("rejects results outside the table and amounts that aren't whole numbers", () => {
+    expect(() => bs("2083-07-01").addYears(LAST_YEAR - 2083 + 1)).toThrow(
+      /plus 4 years is outside the supported range/,
+    );
+    expect(() => bs("2083-07-01").addYears(-200)).toThrow(/plus -200 years is outside/);
+    expect(() => bs("2083-07-01").addYears(0.5)).toThrow(/years must be a whole number/);
   });
 });

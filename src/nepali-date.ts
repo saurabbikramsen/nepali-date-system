@@ -14,7 +14,7 @@ import {
   YEAR_START,
 } from "./core/days.js";
 import { daysToStartInstant, instantToDays, nepalOffsetMs } from "./core/nepal-time.js";
-import { FIRST_YEAR } from "./defined.js";
+import { FIRST_YEAR, LAST_YEAR } from "./defined.js";
 import { toLatinDigits } from "./digits.js";
 import { formatDate, type FormatOptions } from "./format.js";
 import { LOCALES } from "./locales.js";
@@ -166,6 +166,15 @@ function dayRange<F extends InstantFormat>(
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** The units NepaliDate can add, as they appear in error messages. */
+type ArithmeticUnit = "days" | "weeks" | "months" | "years";
+
+function checkWholeNumber(amount: number, unit: ArithmeticUnit): void {
+  if (!Number.isInteger(amount)) {
+    throw new RangeError(`${unit} must be a whole number, got ${String(amount)}`);
+  }
+}
 
 export class NepaliDate {
   readonly year: number;
@@ -347,28 +356,54 @@ export class NepaliDate {
    * Throws RangeError if `days` isn't a whole number or the result is outside the supported range.
    */
   addDays(days: number): NepaliDate {
-    return this.shift(days, 1, "days");
+    return this.shiftDays(days, 1, "days");
   }
   /**
    * The date `weeks` weeks later, or earlier for a negative number, as a new NepaliDate. It falls
    * on the same weekday. Throws RangeError like addDays.
    */
   addWeeks(weeks: number): NepaliDate {
-    return this.shift(weeks, 7, "weeks");
+    return this.shiftDays(weeks, 7, "weeks");
   }
-  private shift(amount: number, daysPerUnit: number, unit: "days" | "weeks"): NepaliDate {
-    if (!Number.isInteger(amount)) {
-      throw new RangeError(`${unit} must be a whole number, got ${String(amount)}`);
-    }
+  /**
+   * The same day `months` months later, or earlier for a negative number, as a new NepaliDate.
+   * If that month is shorter, the result is its last day: Bhadra 32 + 1 month is Aswin 30 when
+   * Aswin has 30 days, never Kartik 2. So adding then subtracting a month doesn't always return
+   * the starting date, and `addMonths(2)` can differ from `addMonths(1).addMonths(1)`.
+   * Throws RangeError like addDays.
+   */
+  addMonths(months: number): NepaliDate {
+    return this.shiftMonths(months, 1, "months");
+  }
+  /**
+   * The same month and day `years` years later, or earlier for a negative number, as a new
+   * NepaliDate. Month lengths change from year to year, so the day is moved back to the month's
+   * last day if needed, as in addMonths. Throws RangeError like addDays.
+   */
+  addYears(years: number): NepaliDate {
+    return this.shiftMonths(years, 12, "years");
+  }
+  private shiftDays(amount: number, daysPerUnit: number, unit: ArithmeticUnit): NepaliDate {
+    checkWholeNumber(amount, unit);
     const days = this.days + amount * daysPerUnit;
-    if (days < 0 || days >= TOTAL_DAYS) {
-      const units = Math.abs(amount) === 1 ? unit.slice(0, -1) : unit;
-      throw new RangeError(
-        `${this} plus ${amount} ${units} is outside the supported range ` +
-          `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
-      );
-    }
+    if (days < 0 || days >= TOTAL_DAYS) throw this.outOfRange(amount, unit);
     return NepaliDate.fromDays(days);
+  }
+  private shiftMonths(amount: number, monthsPerUnit: number, unit: ArithmeticUnit): NepaliDate {
+    checkWholeNumber(amount, unit);
+    // Count months from year 0, so a year boundary is just a multiple of 12.
+    const index = this.year * 12 + (this.month - 1) + amount * monthsPerUnit;
+    const year = Math.floor(index / 12);
+    const month = index - year * 12 + 1;
+    if (year < FIRST_YEAR || year > LAST_YEAR) throw this.outOfRange(amount, unit);
+    return new NepaliDate(year, month, Math.min(this.day, daysInMonth(year, month)));
+  }
+  private outOfRange(amount: number, unit: ArithmeticUnit): RangeError {
+    const units = Math.abs(amount) === 1 ? unit.slice(0, -1) : unit;
+    return new RangeError(
+      `${this} plus ${amount} ${units} is outside the supported range ` +
+        `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
+    );
   }
 
   // conversion
