@@ -183,6 +183,14 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 /** The units NepaliDate can add, as they appear in error messages. */
 type ArithmeticUnit = "days" | "weeks" | "months" | "years";
 
+/** Throws TypeError unless `value` is a NepaliDate; returns it for chaining. */
+function checkDate(value: NepaliDate, method: string): NepaliDate {
+  if (!(value instanceof NepaliDate)) {
+    throw new TypeError(`${method} takes a NepaliDate; use NepaliDate.parse for strings`);
+  }
+  return value;
+}
+
 function checkWholeNumber(amount: number, unit: ArithmeticUnit): void {
   if (!Number.isInteger(amount)) {
     throw new RangeError(`${unit} must be a whole number, got ${String(amount)}`);
@@ -363,6 +371,37 @@ export class NepaliDate {
     return daysInYear(this.year);
   }
 
+  // ----------comparison----------
+  /** Whether this date is earlier than `other`. */
+  isBefore(other: NepaliDate): boolean {
+    return this.days < checkDate(other, "isBefore").days;
+  }
+  /** Whether this date is later than `other`. */
+  isAfter(other: NepaliDate): boolean {
+    return this.days > checkDate(other, "isAfter").days;
+  }
+  /** Whether this is the same date as `other`. Use this rather than ===, which compares objects. */
+  isEqual(other: NepaliDate): boolean {
+    return this.days === checkDate(other, "isEqual").days;
+  }
+  /**
+   * Whether this date and `other` fall in the same day, week, month or year: 2083-07-01 and
+   * 2083-07-30 are the same month but not the same week. Weeks start on Sunday unless
+   * `weekStartsOn` says otherwise.
+   */
+  isSame(other: NepaliDate, unit: RangeUnit, options?: WeekOptions): boolean {
+    checkDate(other, "isSame");
+    return this.periodBounds(unit, options)[0] === other.periodBounds(unit, options)[0];
+  }
+  /**
+   * Whether this date is from `from` to `to`, both included, like NepaliDate.rangeBetween.
+   * Throws RangeError if `to` is before `from`.
+   */
+  isBetween(from: NepaliDate, to: NepaliDate): boolean {
+    const [first, next] = NepaliDate.spanDays(from, to, "isBetween");
+    return this.days >= first && this.days < next;
+  }
+
   // ----------arithmetic----------
   /**
    * The date `days` days later, or earlier for a negative number, as a new NepaliDate.
@@ -475,6 +514,19 @@ export class NepaliDate {
   }
   /** Day numbers of the first day of the period containing this date and of the day after it. */
   private periodDays(unit: RangeUnit, options?: WeekOptions): [number, number] {
+    const [first, next] = this.periodBounds(unit, options);
+    // Only a week can run past the table: it starts and ends on a Saturday, so a few weeks at
+    // each end do. Months and years always fit.
+    if (first < 0 || next > TOTAL_DAYS) {
+      throw new RangeError(
+        `The week containing ${this} runs outside the supported range ` +
+          `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
+      );
+    }
+    return [first, next];
+  }
+  /** Like periodDays, without checking that a week fits in the table. For comparing dates. */
+  private periodBounds(unit: RangeUnit, options?: WeekOptions): [number, number] {
     const weekStartsOn = options?.weekStartsOn ?? 0;
     if (!Number.isInteger(weekStartsOn) || weekStartsOn < 0 || weekStartsOn > 6) {
       throw new RangeError(
@@ -486,13 +538,6 @@ export class NepaliDate {
         return [this.days, this.days + 1];
       case "week": {
         const first = this.days - ((this.dayOfWeek - weekStartsOn + 7) % 7);
-        // The table starts and ends on a Saturday, so a few weeks at each end run past it.
-        if (first < 0 || first + 7 > TOTAL_DAYS) {
-          throw new RangeError(
-            `The week containing ${this} runs outside the supported range ` +
-              `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
-          );
-        }
         return [first, first + 7];
       }
       case "month": {
