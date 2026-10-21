@@ -1,6 +1,6 @@
 {
   "name": "nepali-date-system",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Bikram Sambat (Nepali) calendar for JavaScript: BS/AD conversion with verified month data",
   "keywords": [
     "nepali",
