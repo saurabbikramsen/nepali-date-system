@@ -109,6 +109,42 @@ describe("addMonths and addYears", () => {
   });
 });
 
+describe("differences", () => {
+  it("diffInDays is undone by addDays and flips sign when swapped", () => {
+    fc.assert(
+      fc.property(date, date, (a, b) => {
+        expect(b.addDays(a.diffInDays(b))).toEqual(a);
+        expect(a.diffInDays(b) + b.diffInDays(a)).toBe(0);
+      }),
+      options,
+    );
+  });
+
+  it("diffInMonths and diffInYears are the most addMonths and addYears can add without passing the later date", () => {
+    const lastMonthIndex = LAST_YEAR * 12 + 11;
+    fc.assert(
+      fc.property(date, date, (x, y) => {
+        const [earlier, later] = x.isAfter(y) ? [y, x] : [x, y];
+        const months = later.diffInMonths(earlier);
+        const years = later.diffInYears(earlier);
+        expect(earlier.addMonths(months).isAfter(later)).toBe(false);
+        expect(earlier.addYears(years).isAfter(later)).toBe(false);
+        // One more would pass the later date, when it's still in the table.
+        if (monthIndexOf(earlier) + months + 1 <= lastMonthIndex) {
+          expect(earlier.addMonths(months + 1).isAfter(later)).toBe(true);
+        }
+        if (earlier.year + years + 1 <= LAST_YEAR) {
+          expect(earlier.addYears(years + 1).isAfter(later)).toBe(true);
+        }
+        // Swapping only flips the sign, and never gives -0.
+        expect(earlier.diffInMonths(later)).toBe(0 - months);
+        expect(earlier.diffInYears(later)).toBe(0 - years);
+      }),
+      options,
+    );
+  });
+});
+
 describe("comparison", () => {
   it("compare, isBefore, isAfter and isEqual agree with each other and with string order", () => {
     fc.assert(

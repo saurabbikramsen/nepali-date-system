@@ -312,6 +312,17 @@ function checkWholeNumber(amount: number, unit: ArithmeticUnit): void {
   }
 }
 
+/**
+ * The number of full months from `earlier` to `later`, which must not be before it: the most
+ * that `earlier.addMonths` can add without passing `later`.
+ */
+function fullMonthsBetween(earlier: NepaliDate, later: NepaliDate): number {
+  const months = later.year * 12 + later.month - (earlier.year * 12 + earlier.month);
+  // Adding that many months lands in later's month, on the same day or its last day if shorter.
+  const landingDay = Math.min(earlier.day, daysInMonth(later.year, later.month));
+  return landingDay > later.day ? months - 1 : months;
+}
+
 export class NepaliDate {
   readonly year: number;
   readonly month: number;
@@ -609,6 +620,42 @@ export class NepaliDate {
   isBetween(from: NepaliDate, to: NepaliDate): boolean {
     const [first, next] = NepaliDate.spanDays(from, to, "isBetween");
     return this.days >= first && this.days < next;
+  }
+
+  // ----------differences----------
+  /**
+   * The number of days from `other` to this date: positive if this date is later, negative if
+   * it's earlier, 0 for the same date. `a.diffInDays(b)` is like `a - b`, and
+   * `b.addDays(a.diffInDays(b))` is `a`.
+   */
+  diffInDays(other: NepaliDate): number {
+    return this.days - checkDate(other, "diffInDays").days;
+  }
+  /**
+   * The number of full months from `other` to this date, negative if this date is earlier.
+   * Months are counted as addMonths adds them: 2083-01-15 to 2083-02-14 is 0 months and to
+   * 2083-02-15 is 1, and a month from a day that the next month lacks ends on its last day, so
+   * 2056-05-32 to 2056-06-30 is 1 month (Aswin 2056 has 30 days). Counted from the earlier date,
+   * so swapping the dates only flips the sign.
+   */
+  diffInMonths(other: NepaliDate): number {
+    return this.fullMonthSpans(checkDate(other, "diffInMonths"), 1);
+  }
+  /**
+   * The number of full years from `other` to this date, negative if this date is earlier: an
+   * age, for a birth date. Years are counted as addYears adds them, so 2083-06-26 to 2084-06-25
+   * is 0 years and to 2084-06-26 is 1. Counted from the earlier date, so swapping the dates only
+   * flips the sign.
+   */
+  diffInYears(other: NepaliDate): number {
+    return this.fullMonthSpans(checkDate(other, "diffInYears"), 12);
+  }
+  /** Full spans of `months` months from `other` to this date, negative if this date is earlier. */
+  private fullMonthSpans(other: NepaliDate, months: 1 | 12): number {
+    // 0 - n rather than -n, which would give -0 when n is 0.
+    if (this.days < other.days) return 0 - other.fullMonthSpans(this, months);
+    // addMonths only moves forward as the months increase, so whole years are whole 12 months.
+    return Math.floor(fullMonthsBetween(other, this) / months);
   }
 
   // ----------arithmetic----------

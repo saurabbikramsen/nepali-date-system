@@ -148,6 +148,22 @@ NepaliDate.min(dates); // also NepaliDate.min(a, b, c)
 NepaliDate.max(dates);
 ```
 
+To measure the gap between two dates, `a.diffInDays(b)`, `a.diffInMonths(b)` and `a.diffInYears(b)` count from `b` to `a`, like `a - b`. They're negative if `a` is earlier:
+
+```ts
+const from = NepaliDate.parse("2083-01-15");
+const to = NepaliDate.parse("2084-03-14");
+
+to.diffInDays(from); // 426
+to.diffInMonths(from); // 13: one more month would be 2084-03-15, after `to`
+to.diffInYears(from); // 1
+from.diffInMonths(to); // -13
+
+NepaliDate.today().diffInYears(birthDate); // age in years
+```
+
+Months and years count only full units, the same way `addMonths` and `addYears` add them: `b.addMonths(a.diffInMonths(b))` is never after `a`. That includes [ending on a shorter month's last day](#adding-months-and-years), so `2056-06-30` is 1 month after `2056-05-32`. Swapping the dates only flips the sign.
+
 For reports, `NepaliDate.eachDay(from, to)` lists every date and `NepaliDate.eachMonth(from, to)` lists the first day of every month, both ends included:
 
 ```ts
