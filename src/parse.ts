@@ -1,10 +1,16 @@
 import { toLatinDigits } from "./digits.js";
 import { TOKEN } from "./format.js";
-import { LOCALES } from "./locales.js";
+import { type Locale, LOCALES, type LocaleName, resolveLocale } from "./locales.js";
 import { MONTH_SPELLINGS, monthFromName } from "./month-names.js";
 
 /** Options for NepaliDate.parse with a pattern. */
 export interface ParseOptions {
+  /**
+   * A custom Locale whose month and weekday names should also be read. The built-in English and
+   * Nepali names, in every common spelling, are always read; a custom locale's names take
+   * priority over them. "en" and "ne" are accepted and change nothing.
+   */
+  locale?: LocaleName | Locale;
   /**
    * true (the default) to require the text to match the pattern exactly: MM and DD need two
    * digits, separators must all be the same, and a weekday must be the date's real weekday.
@@ -31,23 +37,63 @@ const alternatives = (names: Iterable<string>) =>
     .map(escapeRegExp)
     .join("|");
 
-const MONTH_NAME = `(${alternatives(MONTH_SPELLINGS)})`;
-
-/** Every weekday name in every locale, full and short, normalized, to its number (0 = Sunday). */
-const WEEKDAY_BY_NAME: ReadonlyMap<string, number> = new Map(
-  Object.values(LOCALES).flatMap((locale) =>
-    [locale.weekdays, locale.weekdaysShort].flatMap((names) =>
-      names.map((name, weekday): [string, number] => [normalize(name), weekday]),
+/** A locale's names, normalized, to their numbers: months 1–12, weekdays 0–6 (0 = Sunday). */
+function namesByNumber(
+  locales: readonly Locale[],
+  kind: "months" | "weekdays",
+): Map<string, number> {
+  const short = kind === "months" ? "monthsShort" : "weekdaysShort";
+  const offset = kind === "months" ? 1 : 0;
+  return new Map(
+    locales.flatMap((locale) =>
+      [locale[kind], locale[short]].flatMap((names) =>
+        names.map((name, index): [string, number] => [normalize(name), index + offset]),
+      ),
     ),
-  ),
-);
-const WEEKDAY_NAME = `(${alternatives(WEEKDAY_BY_NAME.keys())})`;
+  );
+}
+
+/** How to find and read month and weekday names: the regular expressions and lookups. */
+interface NameReader {
+  monthSource: string;
+  weekdaySource: string;
+  month(name: string): number | undefined;
+  weekday(name: string): number | undefined;
+}
+
+const BUILT_IN_WEEKDAYS = namesByNumber(Object.values(LOCALES), "weekdays");
+
+const BUILT_IN_NAMES: NameReader = {
+  monthSource: `(${alternatives(MONTH_SPELLINGS)})`,
+  weekdaySource: `(${alternatives(BUILT_IN_WEEKDAYS.keys())})`,
+  month: monthFromName,
+  weekday: (name) => BUILT_IN_WEEKDAYS.get(name),
+};
+
+/** The built-in names, plus a custom locale's names checked first. */
+function nameReader(locale: LocaleName | Locale | undefined): NameReader {
+  if (locale === undefined) return BUILT_IN_NAMES;
+  const resolved = resolveLocale(locale);
+  if (typeof locale === "string") return BUILT_IN_NAMES;
+  const months = namesByNumber([resolved], "months");
+  const weekdays = namesByNumber([resolved], "weekdays");
+  return {
+    monthSource: `(${alternatives([...months.keys(), ...MONTH_SPELLINGS])})`,
+    weekdaySource: `(${alternatives([...weekdays.keys(), ...BUILT_IN_WEEKDAYS.keys()])})`,
+    month: (name) => months.get(name) ?? monthFromName(name),
+    weekday: (name) => weekdays.get(name) ?? BUILT_IN_WEEKDAYS.get(name),
+  };
+}
 
 /** What each capture group in a compiled pattern holds. */
 type Group =
   "separator" | "YYYY" | "YY" | "MMMM" | "MMM" | "MM" | "M" | "DD" | "D" | "dddd" | "ddd" | "d";
 
-function tokenSource(token: Exclude<Group, "separator">, strict: boolean): string {
+function tokenSource(
+  token: Exclude<Group, "separator">,
+  strict: boolean,
+  names: NameReader,
+): string {
   switch (token) {
     case "YYYY":
       return "(\\d{4})";
@@ -61,10 +107,10 @@ function tokenSource(token: Exclude<Group, "separator">, strict: boolean): strin
       return "(\\d{1,2})";
     case "MMMM":
     case "MMM":
-      return MONTH_NAME;
+      return names.monthSource;
     case "dddd":
     case "ddd":
-      return WEEKDAY_NAME;
+      return names.weekdaySource;
     default: // "d"
       return "([0-6])";
   }
@@ -89,7 +135,11 @@ function literalSource(text: string, strict: boolean, bracketed: boolean, groups
   return source;
 }
 
-function compile(pattern: string, strict: boolean): { regex: RegExp; groups: Group[] } {
+function compile(
+  pattern: string,
+  strict: boolean,
+  names: NameReader,
+): { regex: RegExp; groups: Group[] } {
   const groups: Group[] = [];
   let source = "";
   let last = 0;
@@ -101,7 +151,7 @@ function compile(pattern: string, strict: boolean): { regex: RegExp; groups: Gro
     } else {
       const token = match[0] as Exclude<Group, "separator">;
       groups.push(token);
-      source += tokenSource(token, strict);
+      source += tokenSource(token, strict, names);
     }
     last = index + match[0].length;
   }
@@ -127,7 +177,8 @@ export function parseWithPattern(
     throw new TypeError(`parse text must be a string, got ${typeof text}`);
   }
   const strict = options?.strict ?? true;
-  const { regex, groups } = compile(pattern, strict);
+  const names = nameReader(options?.locale);
+  const { regex, groups } = compile(pattern, strict, names);
   const match = regex.exec(normalize(text));
   if (!match) {
     throw new RangeError(
@@ -136,7 +187,7 @@ export function parseWithPattern(
   }
 
   const values: Partial<
-    Record<"year" | "month" | "day" | "weekday" | "separator", number | string>
+    Record<"year" | "yearSuffix" | "month" | "day" | "weekday" | "separator", number | string>
   > = {};
   const set = (field: keyof typeof values, value: number | string) => {
     if (values[field] !== undefined && values[field] !== value) {
@@ -156,10 +207,10 @@ export function parseWithPattern(
       case "YYYY":
         return set("year", Number(value));
       case "YY":
-        return set("year", 2000 + Number(value));
+        return set("yearSuffix", Number(value));
       case "MMMM":
       case "MMM":
-        return set("month", monthFromName(value) as number);
+        return set("month", names.month(value) as number);
       case "MM":
       case "M":
         return set("month", Number(value));
@@ -168,11 +219,21 @@ export function parseWithPattern(
         return set("day", Number(value));
       case "dddd":
       case "ddd":
-        return set("weekday", WEEKDAY_BY_NAME.get(value) as number);
+        return set("weekday", names.weekday(value) as number);
       default: // "d"
         return set("weekday", Number(value));
     }
   });
+
+  // YY is the last two digits of the year: checked against YYYY if both are given, read as
+  // 20YY if it's alone. 1975–1999 need YYYY.
+  if (values.yearSuffix !== undefined) {
+    if (values.year === undefined) {
+      values.year = 2000 + (values.yearSuffix as number);
+    } else if ((values.year as number) % 100 !== values.yearSuffix) {
+      throw new RangeError(`${JSON.stringify(text)} gives two different years`);
+    }
+  }
 
   return {
     year: values.year as number,

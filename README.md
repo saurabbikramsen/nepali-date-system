@@ -2,7 +2,7 @@
 
 Bikram Sambat (BS, the Nepali calendar) dates for JavaScript and TypeScript. Converts between BS and AD using a month-length table checked against published panchangs and dated historical documents.
 
-It also gives you today's date in Nepal on a server in any time zone, and the exact start and end of Nepali days, months and years for database queries. Date arithmetic, formatting and fiscal-year helpers are planned for later releases.
+It also gives you today's date in Nepal on a server in any time zone, and the exact start and end of Nepali days, months and years for database queries. It formats and parses dates in English or Nepali, with 0–9 or Devanagari digits. Date arithmetic and fiscal-year helpers are planned for later releases.
 
 ## Install
 
@@ -72,7 +72,94 @@ NepaliDate.daysInMonth(2083, 3); // 32
 NepaliDate.daysInYear(2083); // 365
 ```
 
-`parse` and `fromAd` only accept year-first strings. `"26/06/2083"` throws, because day-first and month-first dates can't be told apart.
+Without a pattern, `parse` and `fromAd` only accept year-first strings. `"26/06/2083"` throws, because day-first and month-first dates can't be told apart. To read another layout, give `parse` a [pattern](#parsing).
+
+## Formatting
+
+`format` prints a date with a pattern of tokens:
+
+```ts
+const date = new NepaliDate(2083, 7, 1); // Kartik 1, 2083, a Sunday
+
+date.format("dddd, D MMMM YYYY"); // "Sunday, 1 Kartik 2083"
+date.format("dddd, D MMMM YYYY", { locale: "ne" }); // "आइतबार, १ कार्तिक २०८३"
+date.format("D MMMM YYYY", { locale: "ne", digits: "latin" }); // "1 कार्तिक 2083"
+date.format("YYYY-MM-DD", { digits: "devanagari" }); // "२०८३-०७-०१"
+```
+
+| Token    | Meaning                    | English (`"en"`) | Nepali (`"ne"`) |
+| -------- | -------------------------- | ---------------- | --------------- |
+| `YYYY`   | Year                       | 2083             | २०८३            |
+| `YY`     | Year, last two digits      | 83               | ८३              |
+| `MMMM`   | Month name                 | Kartik           | कार्तिक         |
+| `MMM`    | Short month name           | Kar              | कार्तिक         |
+| `MM`     | Month, two digits          | 07               | ०७              |
+| `M`      | Month                      | 7                | ७               |
+| `DD`     | Day, two digits            | 01               | ०१              |
+| `D`      | Day                        | 1                | १               |
+| `dddd`   | Weekday name               | Sunday           | आइतबार          |
+| `ddd`    | Short weekday name         | Sun              | आइत             |
+| `d`      | Weekday number, 0 = Sunday | 0                | ०               |
+| `[text]` | The text inside, unchanged | text             | text            |
+
+Examples are for Kartik 1, 2083. Months are Baisakh (बैशाख) to Chaitra (चैत), and weekdays Sunday (आइतबार) to Saturday (शनिबार). Nepali month names aren't usually abbreviated, so `MMM` prints them in full.
+
+- **`locale`** picks the names: `"en"` (the default) or `"ne"`.
+- **`digits`** picks the digits: `"latin"` or `"devanagari"`. It defaults to the locale's own: Latin for English, Devanagari for Nepali.
+- **Anything that isn't a token is copied as it is**, including `-`, `/`, `,` and spaces. Token letters are replaced even inside words, so put words in square brackets: `format("[Today is] dddd")` gives `"Today is Sunday"`, but `format("Today")` gives `"To0ay"`.
+
+### Parsing
+
+Give `parse` the same pattern to read a date back:
+
+```ts
+NepaliDate.parse("26 Asoj 2083", "D MMMM YYYY"); // 2083-06-26
+NepaliDate.parse("२६ असोज २०८३", "D MMMM YYYY"); // 2083-06-26
+NepaliDate.parse("26/06/2083", "DD/MM/YYYY"); // 2083-06-26
+NepaliDate.parse("2083.06.26", "YYYY-MM-DD"); // 2083-06-26: -, / and . are interchangeable
+```
+
+- **Month names can be in any common spelling**, English or Nepali, in any case: Asar, Ashadh and Asadh; Aswin, Ashwin and Asoj; Poush, Push and Paush; Mangsir and Mansir; Shrawan and Saun; and formal Nepali spellings such as वैशाख, श्रावण and पौष. Weekday names can be in either language too.
+- **Digits** can be 0–9 or Devanagari.
+- **`YY`** is read as 20YY. Years before 2000 need `YYYY`.
+
+Parsing is strict by default. The whole text must match the pattern, `MM` and `DD` need two digits, the separators must all be the same, and a weekday in the text must be the date's real weekday. Pass `{ strict: false }` to accept one-digit `MM` and `DD`, mixed separators and extra spaces, and to skip the weekday check:
+
+```ts
+NepaliDate.parse("2083-6-26", "YYYY-MM-DD"); // RangeError: doesn't match
+NepaliDate.parse("2083-6-26", "YYYY-MM-DD", { strict: false }); // 2083-06-26
+NepaliDate.parse("Monday, 1 Kartik 2083", "dddd, D MMMM YYYY"); // RangeError: 2083-07-01 is a Sunday
+```
+
+### Custom spellings
+
+To print other spellings or another language, pass your own locale instead of `"en"` or `"ne"`. Start from a built-in one in `LOCALES` and change what you need:
+
+```ts
+import { NepaliDate, LOCALES } from "nepali-date-system";
+
+const formalNepali = {
+  ...LOCALES.ne,
+  months: [
+    "वैशाख",
+    "जेष्ठ",
+    "आषाढ",
+    "श्रावण",
+    "भाद्र",
+    "आश्विन",
+    "कार्तिक",
+    "मार्ग",
+    "पौष",
+    "माघ",
+    "फाल्गुन",
+    "चैत्र",
+  ],
+};
+
+new NepaliDate(2083, 4, 15).format("D MMMM YYYY", { locale: formalNepali }); // "१५ श्रावण २०८३"
+```
+
+A locale needs 12 month names and 7 weekday names, in full and short forms, and its `digits`. No name can stand for two different months or weekdays. Pass the same locale to `parse` (`{ locale: formalNepali }`) to read names that only it uses.
 
 ## Nepal time
 

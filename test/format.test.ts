@@ -138,7 +138,7 @@ describe("format locales", () => {
   it("rejects unknown locales", () => {
     for (const locale of ["np", "hi", "toString", "__proto__"]) {
       expect(() => kartik1.format("MMMM", { locale: locale as never }), locale).toThrow(
-        /locale must be "en" or "ne"/,
+        /locale must be "en", "ne" or a Locale object/,
       );
     }
   });

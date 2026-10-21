@@ -17,7 +17,7 @@ import { daysToStartInstant, instantToDays, nepalOffsetMs } from "./core/nepal-t
 import { FIRST_YEAR } from "./defined.js";
 import { toLatinDigits } from "./digits.js";
 import { formatDate, type FormatOptions } from "./format.js";
-import { getLocale } from "./locales.js";
+import { LOCALES } from "./locales.js";
 import { type ParseOptions, parseWithPattern } from "./parse.js";
 
 /**
@@ -297,7 +297,7 @@ export class NepaliDate {
     const { year, month, day, weekday } = parseWithPattern(text, pattern, options);
     const date = new NepaliDate(year, month, day);
     if (weekday !== undefined && (options?.strict ?? true) && weekday !== date.dayOfWeek) {
-      const names = getLocale("en").weekdays;
+      const names = LOCALES.en.weekdays;
       throw new RangeError(
         `${JSON.stringify(text)} says ${names[weekday]}, but ${date} is a ${names[date.dayOfWeek]}`,
       );

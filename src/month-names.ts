@@ -1,4 +1,4 @@
-import { LOCALES } from "./locales.js";
+import { LOCALES, normalizeName as normalize } from "./locales.js";
 
 /**
  * Other ways people write each month, Baisakh first. Every locale's full and short names are
@@ -18,9 +18,6 @@ const OTHER_SPELLINGS: readonly (readonly string[])[] = [
   ["Phalgun", "Fagun", "Phagun", "Falgoon", "फाल्गुन", "फाल्गुण"],
   ["Chait", "Chaita", "चैत्र"],
 ];
-
-/** Trimmed, lowercase and in standard Unicode form (NFC), so case and encoding don't matter. */
-const normalize = (name: string) => name.trim().normalize("NFC").toLowerCase();
 
 /** Every accepted spelling, normalized, to its month number. */
 const MONTH_BY_NAME: ReadonlyMap<string, number> = (() => {

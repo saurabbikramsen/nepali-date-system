@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { YEAR_START } from "../src/core/days.js";
+import { TOTAL_DAYS, YEAR_START } from "../src/core/days.js";
 import { FIRST_YEAR } from "../src/defined.js";
 import { NepaliDate } from "../src/nepali-date.js";
 
@@ -95,6 +95,13 @@ describe("parse with a pattern: years, literals and repeats", () => {
     expect(() => NepaliDate.parse("01.01.99", "DD.MM.YY")).toThrow(/outside the supported range/);
   });
 
+  it("checks YY against YYYY when both are given, so years before 2000 work", () => {
+    expect(parsed("1975 75 01 01", "YYYY YY MM DD")).toBe("1975-01-01");
+    expect(() => NepaliDate.parse("1975 76 01 01", "YYYY YY MM DD")).toThrow(
+      /gives two different years/,
+    );
+  });
+
   it("matches text in square brackets, ignoring case", () => {
     expect(parsed("Today is 1 Kartik 2083", "[Today is] D MMMM YYYY")).toBe("2083-07-01");
     expect(parsed("today is 1 Kartik 2083", "[Today is] D MMMM YYYY")).toBe("2083-07-01");
@@ -166,6 +173,26 @@ describe("format then parse", () => {
             }
           }
         }
+      }
+    }
+  });
+
+  // Every token, so each day checks every field both ways. YYYY and YY together cover the
+  // years before 2000, which YY alone can't express.
+  const everyToken = "dddd ddd d, D DD MMMM MMM M MM YYYY YY [at] YYYY";
+
+  it.each([
+    ["en", "latin"],
+    ["en", "devanagari"],
+    ["ne", "latin"],
+    ["ne", "devanagari"],
+  ] as const)("reads back every day in the table, in %s with %s digits", (locale, digits) => {
+    for (let days = 0; days < TOTAL_DAYS; days++) {
+      const date = NepaliDate.fromDays(days);
+      const text = date.format(everyToken, { locale, digits });
+      const back = NepaliDate.parse(text, everyToken).toString();
+      if (back !== date.toString()) {
+        expect.fail(`${date} → ${JSON.stringify(text)} → ${back}`);
       }
     }
   });

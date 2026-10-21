@@ -1,5 +1,5 @@
 import { assertDigitSystem, type DigitSystem, toDevanagariDigits } from "./digits.js";
-import { getLocale, type LocaleName } from "./locales.js";
+import { type Locale, type LocaleName, resolveLocale } from "./locales.js";
 
 /** The fields of a date that a pattern can print. */
 export interface FormatFields {
@@ -19,8 +19,11 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** Options for NepaliDate#format. */
 export interface FormatOptions {
-  /** The language for month and weekday names: "en" (the default) or "ne". */
-  locale?: LocaleName;
+  /**
+   * The language for month and weekday names: "en" (the default), "ne", or your own Locale
+   * object for other languages or spellings.
+   */
+  locale?: LocaleName | Locale;
   /**
    * The digits for numbers: "latin" (2083) or "devanagari" (२०८३). Defaults to the locale's:
    * Latin for "en", Devanagari for "ne". Digits inside [square brackets] are left as they are.
@@ -34,7 +37,7 @@ export function formatDate(fields: FormatFields, pattern: string, options?: Form
     throw new TypeError(`format pattern must be a string, got ${typeof pattern}`);
   }
   const { year, month, day, dayOfWeek } = fields;
-  const names = getLocale(options?.locale ?? "en");
+  const names = resolveLocale(options?.locale ?? "en");
   const digits = options?.digits ?? names.digits;
   assertDigitSystem(digits);
   const number = (text: string) => (digits === "devanagari" ? toDevanagariDigits(text) : text);
