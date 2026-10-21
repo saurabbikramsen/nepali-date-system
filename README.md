@@ -70,6 +70,14 @@ date.daysInMonth; // 31
 date.daysInYear; // 365
 ```
 
+Nepal's fiscal year runs from Shrawan 1 to the last day of Asar, so Baisakh to Asar belong to the fiscal year that began the year before:
+
+```ts
+date.fiscalYear(); // { startYear: 2083, endYear: 2084, label: "2083/84" }
+new NepaliDate(2084, 3, 15).fiscalYear().label; // "2083/84"
+new NepaliDate(2084, 4, 1).fiscalYear().label; // "2084/85"
+```
+
 ### Storing and sending dates
 
 `NepaliDate` instances are immutable. They serialize to `YYYY-MM-DD` strings, and `NepaliDate.parse` reads them back.

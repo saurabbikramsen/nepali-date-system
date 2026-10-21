@@ -2,7 +2,7 @@ import { inspect } from "node:util";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
-import { type InstantRange, NepaliDate } from "../src/nepali-date.js";
+import { type FiscalYear, type InstantRange, NepaliDate } from "../src/nepali-date.js";
 
 describe("NepaliDate construction", () => {
   it("accepts valid dates", () => {
@@ -185,6 +185,60 @@ describe("calendar info", () => {
     );
     expect(NepaliDate.MIN_DATE.toAd()).toEqual({ year: 1918, month: 4, day: 13 });
     expect(NepaliDate.MAX_DATE.toAd()).toEqual({ year: 2030, month: 4, day: 13 });
+  });
+});
+
+describe("fiscalYear", () => {
+  const fy2083 = { startYear: 2083, endYear: 2084, label: "2083/84" };
+
+  it.each([
+    ["2083-04-01", fy2083], // Shrawan 1, the first day
+    ["2083-06-26", fy2083],
+    ["2083-12-30", fy2083], // Chaitra, the end of the BS year
+    ["2084-01-01", fy2083], // Baisakh 1 stays in the fiscal year that began in 2083
+    [`2084-03-${NepaliDate.daysInMonth(2084, 3)}`, fy2083], // the last day of Asar
+    ["2083-03-32", { startYear: 2082, endYear: 2083, label: "2082/83" }],
+    ["2083-01-01", { startYear: 2082, endYear: 2083, label: "2082/83" }],
+  ])("puts %s in the right fiscal year", (text, expected) => {
+    expect(NepaliDate.parse(text).fiscalYear()).toEqual(expected);
+  });
+
+  it("pads the end year's last two digits across a century", () => {
+    expect(new NepaliDate(2000, 1, 1).fiscalYear().label).toBe("1999/00");
+    expect(new NepaliDate(2000, 4, 1).fiscalYear().label).toBe("2000/01");
+    expect(new NepaliDate(2009, 4, 1).fiscalYear().label).toBe("2009/10");
+  });
+
+  it("gives the fiscal year before the table for its first Baisakh to Asar", () => {
+    expect(NepaliDate.MIN_DATE.fiscalYear()).toEqual({
+      startYear: FIRST_YEAR - 1,
+      endYear: FIRST_YEAR,
+      label: `${FIRST_YEAR - 1}/${String(FIRST_YEAR % 100).padStart(2, "0")}`,
+    });
+  });
+
+  it("changes on Shrawan 1 and on no other day in the table", () => {
+    let previous = NepaliDate.MIN_DATE.fiscalYear();
+    for (let days = 1; days < TOTAL_DAYS; days++) {
+      const date = NepaliDate.fromDays(days);
+      const current = date.fiscalYear();
+      const isShrawan1 = date.month === 4 && date.day === 1;
+      if ((current.startYear !== previous.startYear) !== isShrawan1) {
+        expect.fail(`fiscal year went from ${previous.label} to ${current.label} on ${date}`);
+      }
+      if (isShrawan1 && current.startYear !== previous.startYear + 1) {
+        expect.fail(`fiscal year jumped from ${previous.label} to ${current.label} on ${date}`);
+      }
+      previous = current;
+    }
+  });
+
+  it("returns a new object every call", () => {
+    const date = new NepaliDate(2083, 6, 26);
+    const first = date.fiscalYear();
+    first.label = "changed";
+    expect(date.fiscalYear().label).toBe("2083/84");
+    expectTypeOf(first).toEqualTypeOf<FiscalYear>();
   });
 });
 

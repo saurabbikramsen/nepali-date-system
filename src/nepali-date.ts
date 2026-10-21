@@ -122,6 +122,22 @@ export interface InstantRange<T = Date> {
   end: T;
 }
 
+/**
+ * A Nepal fiscal year, which runs from Shrawan 1 to the last day of Asar the next year:
+ * `{ startYear: 2083, endYear: 2084, label: "2083/84" }`.
+ */
+export interface FiscalYear {
+  /** The BS year that holds Shrawan 1, the first day. */
+  startYear: number;
+  /** The BS year that holds the last day of Asar, always startYear + 1. */
+  endYear: number;
+  /** startYear and the last two digits of endYear, as written in Nepal: "2083/84". */
+  label: string;
+}
+
+/** Shrawan, the first month of the fiscal year. */
+const FISCAL_YEAR_FIRST_MONTH = 4;
+
 const MINUTE_MS = 60_000;
 
 /** The offset in ms from InstantOptions, or undefined for Nepal's own offset. */
@@ -415,6 +431,16 @@ export class NepaliDate {
   }
   get daysInYear(): number {
     return daysInYear(this.year);
+  }
+  /**
+   * The Nepal fiscal year this date falls in. It starts on Shrawan 1, so Baisakh to Asar belong
+   * to the fiscal year that began the year before: 2083-04-01 and 2084-03-32 are both in
+   * `{ startYear: 2083, endYear: 2084, label: "2083/84" }`. Returns a new object on every call.
+   */
+  fiscalYear(): FiscalYear {
+    const startYear = this.month >= FISCAL_YEAR_FIRST_MONTH ? this.year : this.year - 1;
+    const endYear = startYear + 1;
+    return { startYear, endYear, label: `${startYear}/${pad2(endYear % 100)}` };
   }
 
   // ----------comparison----------
