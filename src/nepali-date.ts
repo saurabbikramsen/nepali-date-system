@@ -341,6 +341,36 @@ export class NepaliDate {
     return daysInYear(this.year);
   }
 
+  // ----------arithmetic----------
+  /**
+   * The date `days` days later, or earlier for a negative number, as a new NepaliDate.
+   * Throws RangeError if `days` isn't a whole number or the result is outside the supported range.
+   */
+  addDays(days: number): NepaliDate {
+    return this.shift(days, 1, "days");
+  }
+  /**
+   * The date `weeks` weeks later, or earlier for a negative number, as a new NepaliDate. It falls
+   * on the same weekday. Throws RangeError like addDays.
+   */
+  addWeeks(weeks: number): NepaliDate {
+    return this.shift(weeks, 7, "weeks");
+  }
+  private shift(amount: number, daysPerUnit: number, unit: "days" | "weeks"): NepaliDate {
+    if (!Number.isInteger(amount)) {
+      throw new RangeError(`${unit} must be a whole number, got ${String(amount)}`);
+    }
+    const days = this.days + amount * daysPerUnit;
+    if (days < 0 || days >= TOTAL_DAYS) {
+      const units = Math.abs(amount) === 1 ? unit.slice(0, -1) : unit;
+      throw new RangeError(
+        `${this} plus ${amount} ${units} is outside the supported range ` +
+          `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
+      );
+    }
+    return NepaliDate.fromDays(days);
+  }
+
   // conversion
   toAd(): DateParts {
     return daysToAd(this.days);
