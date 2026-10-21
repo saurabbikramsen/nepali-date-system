@@ -308,6 +308,31 @@ export class NepaliDate {
     return { start: adDateString(first), end: adDateString(next) };
   }
 
+  /**
+   * Every date from `from` to `to`, both included, oldest first: one entry per day for a daily
+   * report. Throws RangeError if `to` is before `from`.
+   */
+  static eachDay(from: NepaliDate, to: NepaliDate): NepaliDate[] {
+    const [first, next] = NepaliDate.spanDays(from, to, "eachDay");
+    return Array.from({ length: next - first }, (_, i) => NepaliDate.fromDays(first + i));
+  }
+
+  /**
+   * The first day of every month from the month of `from` to the month of `to`, both included,
+   * oldest first: one entry per month for a monthly report, e.g. with `.range("month")` for each.
+   * Throws RangeError if `to` is before `from`.
+   */
+  static eachMonth(from: NepaliDate, to: NepaliDate): NepaliDate[] {
+    NepaliDate.spanDays(from, to, "eachMonth");
+    // Count months from year 0, as addMonths does, so a year boundary is a multiple of 12.
+    const first = from.year * 12 + (from.month - 1);
+    const last = to.year * 12 + (to.month - 1);
+    return Array.from({ length: last - first + 1 }, (_, i) => {
+      const index = first + i;
+      return new NepaliDate(Math.floor(index / 12), (index % 12) + 1, 1);
+    });
+  }
+
   /** Day numbers of `from` and of the day after `to`, after checking both. */
   private static spanDays(from: NepaliDate, to: NepaliDate, method: string): [number, number] {
     if (!(from instanceof NepaliDate) || !(to instanceof NepaliDate)) {

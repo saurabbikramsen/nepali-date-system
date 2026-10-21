@@ -236,3 +236,100 @@ describe("NepaliDate.min and NepaliDate.max", () => {
     expect(() => NepaliDate.min([[a]] as never)).toThrow(TypeError);
   });
 });
+
+describe("NepaliDate.eachDay", () => {
+  it("lists every date from the first to the last, both included", () => {
+    expect(NepaliDate.eachDay(bs("2083-06-29"), bs("2083-07-02")).map(String)).toEqual([
+      "2083-06-29",
+      "2083-06-30",
+      "2083-06-31",
+      "2083-07-01",
+      "2083-07-02",
+    ]);
+  });
+
+  it("gives one date when from and to are the same", () => {
+    expect(NepaliDate.eachDay(bs("2083-07-01"), bs("2083-07-01")).map(String)).toEqual([
+      "2083-07-01",
+    ]);
+  });
+
+  it("crosses 32-day months and year ends one day at a time", () => {
+    const days = NepaliDate.eachDay(bs("2083-03-30"), bs("2084-01-02"));
+    expect(days[2].toString()).toBe("2083-03-32");
+    expect(days[0].toString()).toBe("2083-03-30");
+    for (let i = 1; i < days.length; i++) {
+      if (!days[i].isEqual(days[i - 1].addDays(1))) expect.fail(`${days[i - 1]} → ${days[i]}`);
+    }
+    expect(days[days.length - 1].toString()).toBe("2084-01-02");
+  });
+
+  it("covers the whole table", () => {
+    const all = NepaliDate.eachDay(NepaliDate.MIN_DATE, NepaliDate.MAX_DATE);
+    expect(all.length).toBe(TOTAL_DAYS);
+    expect(all[0]).toEqual(NepaliDate.MIN_DATE);
+    expect(all[all.length - 1]).toEqual(NepaliDate.MAX_DATE);
+  });
+
+  it("rejects a reversed span and anything but NepaliDate instances", () => {
+    expect(() => NepaliDate.eachDay(bs("2083-07-02"), bs("2083-07-01"))).toThrow(
+      /eachDay needs from on or before to/,
+    );
+    expect(() => NepaliDate.eachDay("2083-07-01" as never, bs("2083-07-02"))).toThrow(TypeError);
+  });
+});
+
+describe("NepaliDate.eachMonth", () => {
+  it("lists the first day of every month, including both end months", () => {
+    expect(NepaliDate.eachMonth(bs("2083-06-15"), bs("2083-09-03")).map(String)).toEqual([
+      "2083-06-01",
+      "2083-07-01",
+      "2083-08-01",
+      "2083-09-01",
+    ]);
+  });
+
+  it("crosses year ends", () => {
+    expect(NepaliDate.eachMonth(bs("2083-11-10"), bs("2084-02-05")).map(String)).toEqual([
+      "2083-11-01",
+      "2083-12-01",
+      "2084-01-01",
+      "2084-02-01",
+    ]);
+  });
+
+  it("gives one month when both dates are in it, even on its first and last day", () => {
+    expect(NepaliDate.eachMonth(bs("2083-07-01"), bs("2083-07-30")).map(String)).toEqual([
+      "2083-07-01",
+    ]);
+  });
+
+  it("covers every month in the table", () => {
+    const months = NepaliDate.eachMonth(NepaliDate.MIN_DATE, NepaliDate.MAX_DATE);
+    expect(months.length).toBe(112 * 12);
+    for (let i = 1; i < months.length; i++) {
+      if (!months[i].isEqual(months[i - 1].addMonths(1))) {
+        expect.fail(`${months[i - 1]} → ${months[i]}`);
+      }
+    }
+  });
+
+  it("builds a monthly report with range", () => {
+    const rows = NepaliDate.eachMonth(bs("2083-01-01"), bs("2083-03-01")).map((month) => ({
+      label: month.format("MMMM YYYY"),
+      ...month.adRange("month"),
+    }));
+    expect(rows).toEqual([
+      { label: "Baisakh 2083", start: "2026-04-14", end: "2026-05-15" },
+      { label: "Jestha 2083", start: "2026-05-15", end: "2026-06-15" },
+      { label: "Asar 2083", start: "2026-06-15", end: "2026-07-17" },
+    ]);
+  });
+
+  it("rejects a reversed span and anything but NepaliDate instances", () => {
+    expect(() => NepaliDate.eachMonth(bs("2083-08-01"), bs("2083-07-30"))).toThrow(
+      /eachMonth needs from on or before to/,
+    );
+    expect(() => NepaliDate.eachMonth(bs("2083-07-01"), null as never)).toThrow(TypeError);
+  });
+});
