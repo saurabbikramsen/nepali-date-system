@@ -84,6 +84,14 @@ asar.fiscalQuarter(); // 4
 asar.chaumasik(); // 3
 ```
 
+If your organization's fiscal year starts in another month, pass `fiscalYearStartMonth` (1 = Baisakh to 12 = Chaitra). Quarters and chaumasiks are then counted from that month. A fiscal year that starts in Baisakh is the BS year:
+
+```ts
+const baisakh = { fiscalYearStartMonth: 1 };
+date.fiscalYear(baisakh); // { startYear: 2083, endYear: 2083, label: "2083" }
+date.fiscalQuarter(baisakh); // 2 (Shrawan–Aswin)
+```
+
 To query a whole fiscal year, quarter or chaumasik, see [Fiscal periods](#fiscal-periods).
 
 ### Storing and sending dates
@@ -327,7 +335,17 @@ date.endOf("chaumasik"); // 2083-07-30
 NepaliDate.today().range("fiscalQuarter"); // the current fiscal quarter
 ```
 
-Fiscal years 1974/75 and 2086/87 run past the [supported range](#supported-range), and so do their third chaumasiks, so those ranges throw a `RangeError`. Every fiscal quarter fits in the range.
+For a fiscal year that starts in another month, pass the same `fiscalYearStartMonth` to `range`, `adRange`, `startOf`, `endOf` and `isSame`:
+
+```ts
+const baisakh = { fiscalYearStartMonth: 1 };
+
+date.range("fiscalYear", baisakh); // the same as date.range("year")
+date.startOf("fiscalQuarter", baisakh); // 2083-04-01, the start of quarter 2
+date.adRange("chaumasik", baisakh); // { start: "2026-04-14", end: "2026-08-17" }, Baisakh–Shrawan
+```
+
+A fiscal period that crosses from Chaitra into Baisakh runs past the [supported range](#supported-range) at either end, so its range throws a `RangeError`. With the default Shrawan start, that's fiscal years 1974/75 and 2086/87 and their third chaumasiks; every fiscal quarter fits. With a Baisakh start, every fiscal period fits.
 
 ### Why not `BETWEEN … 23:59:59`?
 
