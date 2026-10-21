@@ -2,7 +2,7 @@
 
 Bikram Sambat (BS, the Nepali calendar) dates for JavaScript and TypeScript. Converts between BS and AD using a month-length table checked against published panchangs and dated historical documents.
 
-It also gives you today's date in Nepal on a server in any time zone, and the exact start and end of Nepali days, months and years for database queries. It formats and parses dates in English or Nepali, with 0–9 or Devanagari digits. Date arithmetic and fiscal-year helpers are planned for later releases.
+It also gives you today's date in Nepal on a server in any time zone, and the exact start and end of Nepali days, months and years for database queries. It adds and compares dates, and formats and parses them in English or Nepali, with 0–9 or Devanagari digits. Fiscal-year helpers are planned for a later release.
 
 ## Install
 
@@ -73,6 +73,68 @@ NepaliDate.daysInYear(2083); // 365
 ```
 
 Without a pattern, `parse` and `fromAd` only accept year-first strings. `"26/06/2083"` throws, because day-first and month-first dates can't be told apart. To read another layout, give `parse` a [pattern](#parsing).
+
+## Date arithmetic and comparison
+
+Every method returns a new date; a `NepaliDate` never changes.
+
+```ts
+const date = NepaliDate.parse("2083-07-15");
+
+date.addDays(10); // 2083-07-25
+date.addWeeks(-1); // 2083-07-08
+date.addMonths(1); // 2083-08-15
+date.addYears(1); // 2084-07-15
+date.startOf("month"); // 2083-07-01, also "week" and "year"
+date.endOf("month"); // 2083-07-30
+```
+
+Negative amounts go back in time. Amounts must be whole numbers, and a result outside the [supported range](#supported-range) throws a `RangeError`.
+
+To compare dates, use these methods rather than `<` or `===`, which compare objects:
+
+```ts
+a.isBefore(b);
+a.isAfter(b);
+a.isEqual(b);
+a.isSame(b, "month"); // also "day", "week" and "year"
+date.isBetween(from, to); // both ends included
+
+dates.sort(NepaliDate.compare); // oldest first
+NepaliDate.min(dates); // also NepaliDate.min(a, b, c)
+NepaliDate.max(dates);
+```
+
+For reports, `NepaliDate.eachDay(from, to)` lists every date and `NepaliDate.eachMonth(from, to)` lists the first day of every month, both ends included:
+
+```ts
+NepaliDate.eachMonth(from, to).map((month) => ({
+  label: month.format("MMMM YYYY"), // "Baisakh 2083"
+  ...month.adRange("month"), // { start: "2026-04-14", end: "2026-05-15" }
+}));
+```
+
+### Adding months and years
+
+`addMonths` and `addYears` keep the day of the month. BS months are 29 to 32 days long and change from year to year, so when the new month is shorter, you get its last day instead. You never spill over into the following month:
+
+| Date         | Operation                     | Result       | Why                                                |
+| ------------ | ----------------------------- | ------------ | -------------------------------------------------- |
+| `2083-07-15` | `.addMonths(1)`               | `2083-08-15` | Day 15 exists in every month                       |
+| `2056-05-32` | `.addMonths(1)`               | `2056-06-30` | Bhadra 2056 has 32 days, Aswin 2056 has 30         |
+| `2083-07-30` | `.addMonths(1)`               | `2083-08-29` | Mangsir 2083 has 29 days                           |
+| `2083-03-32` | `.addMonths(-1)`              | `2083-02-31` | Jestha 2083 has 31 days                            |
+| `2083-12-30` | `.addMonths(1)`               | `2084-01-30` | Chaitra rolls over into Baisakh of the next year   |
+| `2057-12-31` | `.addMonths(1)`               | `2058-01-30` | Baisakh 2058 has 30 days                           |
+| `2084-01-31` | `.addMonths(-1)`              | `2083-12-30` | Back over the year end: Chaitra 2083 has 30 days   |
+| `2083-01-31` | `.addMonths(-13)`             | `2081-12-31` | Chaitra 2081 has 31 days, so nothing changes       |
+| `2081-12-31` | `.addYears(1)`                | `2082-12-30` | Chaitra 2082 has 30 days                           |
+| `2082-03-32` | `.addYears(-1)`               | `2081-03-31` | Asar 2081 has 31 days                              |
+| `2056-05-32` | `.addMonths(1).addMonths(-1)` | `2056-05-30` | The 32nd was lost in Aswin, so this doesn't undo   |
+| `2029-03-32` | `.addMonths(2)`               | `2029-05-32` | Bhadra 2029 has 32 days                            |
+| `2029-03-32` | `.addMonths(1).addMonths(1)`  | `2029-05-31` | One month at a time loses the 32nd in Shrawan (31) |
+
+So adding and then subtracting months doesn't always return the starting date, and `addMonths(2)` can differ from `addMonths(1).addMonths(1)`. Add the whole amount in one call. Days 1 to 29 exist in every month, so they never change.
 
 ## Formatting
 
@@ -195,12 +257,14 @@ The offset is in minutes east of UTC: `345` is +05:45 and `-240` is −04:00. Th
 
 ## Database queries
 
-A Nepali day, month or year starts at midnight in Kathmandu, which is 18:15 UTC the day before. `range` gives the exact start and end of the period as moments in time, so you can filter timestamp columns by Nepali dates:
+A Nepali day, week, month or year starts at midnight in Kathmandu, which is 18:15 UTC the day before. `range` gives the exact start and end of the period as moments in time, so you can filter timestamp columns by Nepali dates:
 
 ```ts
-const { start, end } = NepaliDate.today().range("month"); // also "day" and "year"
+const { start, end } = NepaliDate.today().range("month"); // also "day", "week" and "year"
 // WHERE created_at >= start AND created_at < end
 ```
+
+Weeks run Sunday to Saturday, because Sunday starts Nepal's working week. Pass `weekStartsOn` (0 = Sunday to 6 = Saturday) for another start: `range("week", { weekStartsOn: 1 })` runs Monday to Sunday. `adRange` and `startOf`/`endOf` take the same option.
 
 The range is half-open: `start` is included and `end` is excluded, because `end` is the first moment of the next period. Always query with `>= start AND < end`. For any span of whole days, use `NepaliDate.rangeBetween(from, to)`, which includes both `from` and `to`.
 

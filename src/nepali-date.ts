@@ -14,7 +14,7 @@ import {
   YEAR_START,
 } from "./core/days.js";
 import { daysToStartInstant, instantToDays, nepalOffsetMs } from "./core/nepal-time.js";
-import { FIRST_YEAR } from "./defined.js";
+import { FIRST_YEAR, LAST_YEAR } from "./defined.js";
 import { toLatinDigits } from "./digits.js";
 import { formatDate, type FormatOptions } from "./format.js";
 import { LOCALES } from "./locales.js";
@@ -78,8 +78,20 @@ export interface InstantOptions {
   offsetMinutes?: number;
 }
 
-/** The calendar periods that NepaliDate#range covers. */
-export type RangeUnit = "day" | "month" | "year";
+/** The calendar periods that NepaliDate#range, startOf and endOf cover. */
+export type RangeUnit = "day" | "week" | "month" | "year";
+
+/** A weekday number: 0 is Sunday, 6 is Saturday. */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** Options for periods that can be a week. */
+export interface WeekOptions {
+  /**
+   * The day a week starts on, 0 (Sunday, the default and the start of Nepal's working week)
+   * to 6 (Saturday). Only used when the unit is "week".
+   */
+  weekStartsOn?: Weekday;
+}
 
 /**
  * How a range gives its bounds: a Date, an ISO 8601 string in UTC such as
@@ -95,7 +107,8 @@ export interface InstantFormatTypes {
 }
 
 /** Options for NepaliDate#range and NepaliDate.rangeBetween. */
-export interface RangeOptions<F extends InstantFormat = "date"> extends InstantOptions {
+export interface RangeOptions<F extends InstantFormat = "date">
+  extends InstantOptions, WeekOptions {
   /** The type of `start` and `end`: "date" (the default), "iso" or "ms". */
   as?: F;
 }
@@ -166,6 +179,44 @@ function dayRange<F extends InstantFormat>(
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** The units NepaliDate can add, as they appear in error messages. */
+type ArithmeticUnit = "days" | "weeks" | "months" | "years";
+
+/** Throws TypeError unless `value` is a NepaliDate; returns it for chaining. */
+function checkDate(value: NepaliDate, method: string): NepaliDate {
+  if (!(value instanceof NepaliDate)) {
+    throw new TypeError(`${method} takes a NepaliDate; use NepaliDate.parse for strings`);
+  }
+  return value;
+}
+
+/**
+ * The date that wins `beats` against all others, from dates passed separately or as one array.
+ * Earlier dates win ties, because `beats` must be strictly better.
+ */
+function pickDate(
+  args: readonly NepaliDate[] | readonly [readonly NepaliDate[]],
+  method: "min" | "max",
+  beats: (candidate: NepaliDate, best: NepaliDate) => boolean,
+): NepaliDate {
+  const dates: readonly NepaliDate[] =
+    args.length === 1 && Array.isArray(args[0]) ? args[0] : (args as readonly NepaliDate[]);
+  if (dates.length === 0) {
+    throw new RangeError(`${method} needs at least one date`);
+  }
+  let best = checkDate(dates[0], method);
+  for (let i = 1; i < dates.length; i++) {
+    if (beats(checkDate(dates[i], method), best)) best = dates[i];
+  }
+  return best;
+}
+
+function checkWholeNumber(amount: number, unit: ArithmeticUnit): void {
+  if (!Number.isInteger(amount)) {
+    throw new RangeError(`${unit} must be a whole number, got ${String(amount)}`);
+  }
+}
 
 export class NepaliDate {
   readonly year: number;
@@ -257,6 +308,31 @@ export class NepaliDate {
     return { start: adDateString(first), end: adDateString(next) };
   }
 
+  /**
+   * Every date from `from` to `to`, both included, oldest first: one entry per day for a daily
+   * report. Throws RangeError if `to` is before `from`.
+   */
+  static eachDay(from: NepaliDate, to: NepaliDate): NepaliDate[] {
+    const [first, next] = NepaliDate.spanDays(from, to, "eachDay");
+    return Array.from({ length: next - first }, (_, i) => NepaliDate.fromDays(first + i));
+  }
+
+  /**
+   * The first day of every month from the month of `from` to the month of `to`, both included,
+   * oldest first: one entry per month for a monthly report, e.g. with `.range("month")` for each.
+   * Throws RangeError if `to` is before `from`.
+   */
+  static eachMonth(from: NepaliDate, to: NepaliDate): NepaliDate[] {
+    NepaliDate.spanDays(from, to, "eachMonth");
+    // Count months from year 0, as addMonths does, so a year boundary is a multiple of 12.
+    const first = from.year * 12 + (from.month - 1);
+    const last = to.year * 12 + (to.month - 1);
+    return Array.from({ length: last - first + 1 }, (_, i) => {
+      const index = first + i;
+      return new NepaliDate(Math.floor(index / 12), (index % 12) + 1, 1);
+    });
+  }
+
   /** Day numbers of `from` and of the day after `to`, after checking both. */
   private static spanDays(from: NepaliDate, to: NepaliDate, method: string): [number, number] {
     if (!(from instanceof NepaliDate) || !(to instanceof NepaliDate)) {
@@ -341,6 +417,140 @@ export class NepaliDate {
     return daysInYear(this.year);
   }
 
+  // ----------comparison----------
+  /**
+   * -1 if `a` is earlier than `b`, 1 if it's later, 0 if they're the same date. Sorts dates
+   * oldest first when passed to sort: `dates.sort(NepaliDate.compare)`. For newest first, use
+   * `dates.sort((a, b) => NepaliDate.compare(b, a))`.
+   */
+  static compare(a: NepaliDate, b: NepaliDate): -1 | 0 | 1 {
+    const difference = checkDate(a, "compare").days - checkDate(b, "compare").days;
+    return difference < 0 ? -1 : difference > 0 ? 1 : 0;
+  }
+  /**
+   * The earliest of the given dates, passed separately or as one array: `NepaliDate.min(a, b)`
+   * or `NepaliDate.min(dates)`. Use the array form for long lists, which can be too long to
+   * spread into arguments. Returns one of the given dates, the first if several are equal.
+   * Throws RangeError if there are none.
+   */
+  static min(dates: readonly NepaliDate[]): NepaliDate;
+  static min(...dates: NepaliDate[]): NepaliDate;
+  static min(...args: NepaliDate[] | [readonly NepaliDate[]]): NepaliDate {
+    return pickDate(args, "min", (candidate, best) => candidate.days < best.days);
+  }
+  /**
+   * The latest of the given dates, passed separately or as one array, like NepaliDate.min.
+   * Returns one of the given dates, the first if several are equal. Throws RangeError if there
+   * are none.
+   */
+  static max(dates: readonly NepaliDate[]): NepaliDate;
+  static max(...dates: NepaliDate[]): NepaliDate;
+  static max(...args: NepaliDate[] | [readonly NepaliDate[]]): NepaliDate {
+    return pickDate(args, "max", (candidate, best) => candidate.days > best.days);
+  }
+  /** Whether this date is earlier than `other`. */
+  isBefore(other: NepaliDate): boolean {
+    return this.days < checkDate(other, "isBefore").days;
+  }
+  /** Whether this date is later than `other`. */
+  isAfter(other: NepaliDate): boolean {
+    return this.days > checkDate(other, "isAfter").days;
+  }
+  /** Whether this is the same date as `other`. Use this rather than ===, which compares objects. */
+  isEqual(other: NepaliDate): boolean {
+    return this.days === checkDate(other, "isEqual").days;
+  }
+  /**
+   * Whether this date and `other` fall in the same day, week, month or year: 2083-07-01 and
+   * 2083-07-30 are the same month but not the same week. Weeks start on Sunday unless
+   * `weekStartsOn` says otherwise.
+   */
+  isSame(other: NepaliDate, unit: RangeUnit, options?: WeekOptions): boolean {
+    checkDate(other, "isSame");
+    return this.periodBounds(unit, options)[0] === other.periodBounds(unit, options)[0];
+  }
+  /**
+   * Whether this date is from `from` to `to`, both included, like NepaliDate.rangeBetween.
+   * Throws RangeError if `to` is before `from`.
+   */
+  isBetween(from: NepaliDate, to: NepaliDate): boolean {
+    const [first, next] = NepaliDate.spanDays(from, to, "isBetween");
+    return this.days >= first && this.days < next;
+  }
+
+  // ----------arithmetic----------
+  /**
+   * The date `days` days later, or earlier for a negative number, as a new NepaliDate.
+   * Throws RangeError if `days` isn't a whole number or the result is outside the supported range.
+   */
+  addDays(days: number): NepaliDate {
+    return this.shiftDays(days, 1, "days");
+  }
+  /**
+   * The date `weeks` weeks later, or earlier for a negative number, as a new NepaliDate. It falls
+   * on the same weekday. Throws RangeError like addDays.
+   */
+  addWeeks(weeks: number): NepaliDate {
+    return this.shiftDays(weeks, 7, "weeks");
+  }
+  /**
+   * The same day `months` months later, or earlier for a negative number, as a new NepaliDate.
+   * If that month is shorter, the result is its last day: Bhadra 32 + 1 month is Aswin 30 when
+   * Aswin has 30 days, never Kartik 2. So adding then subtracting a month doesn't always return
+   * the starting date, and `addMonths(2)` can differ from `addMonths(1).addMonths(1)`.
+   * Throws RangeError like addDays.
+   */
+  addMonths(months: number): NepaliDate {
+    return this.shiftMonths(months, 1, "months");
+  }
+  /**
+   * The same month and day `years` years later, or earlier for a negative number, as a new
+   * NepaliDate. Month lengths change from year to year, so the day is moved back to the month's
+   * last day if needed, as in addMonths. Throws RangeError like addDays.
+   */
+  addYears(years: number): NepaliDate {
+    return this.shiftMonths(years, 12, "years");
+  }
+  /**
+   * The first day of the week, month or year containing this date, as a new NepaliDate: Sunday
+   * for a week unless `weekStartsOn` says otherwise, Baisakh 1 for a year. "day" gives the same
+   * date. For the moment a period starts, use range or startInstant.
+   */
+  startOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
+    return NepaliDate.fromDays(this.periodDays(unit, options)[0]);
+  }
+  /**
+   * The last day of the week, month or year containing this date, as a new NepaliDate: Saturday
+   * for a week starting on Sunday, day 29–32 of the month, or the last day of Chaitra. "day"
+   * gives the same date. This is a date, not a time; to query timestamps up to the end of a
+   * period, use range, whose end is the next period's start.
+   */
+  endOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
+    return NepaliDate.fromDays(this.periodDays(unit, options)[1] - 1);
+  }
+  private shiftDays(amount: number, daysPerUnit: number, unit: ArithmeticUnit): NepaliDate {
+    checkWholeNumber(amount, unit);
+    const days = this.days + amount * daysPerUnit;
+    if (days < 0 || days >= TOTAL_DAYS) throw this.outOfRange(amount, unit);
+    return NepaliDate.fromDays(days);
+  }
+  private shiftMonths(amount: number, monthsPerUnit: number, unit: ArithmeticUnit): NepaliDate {
+    checkWholeNumber(amount, unit);
+    // Count months from year 0, so a year boundary is just a multiple of 12.
+    const index = this.year * 12 + (this.month - 1) + amount * monthsPerUnit;
+    const year = Math.floor(index / 12);
+    const month = index - year * 12 + 1;
+    if (year < FIRST_YEAR || year > LAST_YEAR) throw this.outOfRange(amount, unit);
+    return new NepaliDate(year, month, Math.min(this.day, daysInMonth(year, month)));
+  }
+  private outOfRange(amount: number, unit: ArithmeticUnit): RangeError {
+    const units = Math.abs(amount) === 1 ? unit.slice(0, -1) : unit;
+    return new RangeError(
+      `${this} plus ${amount} ${units} is outside the supported range ` +
+        `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
+    );
+  }
+
   // conversion
   toAd(): DateParts {
     return daysToAd(this.days);
@@ -354,33 +564,58 @@ export class NepaliDate {
     return new Date(daysToStartInstant(this.days, overrideOffsetMs(options)));
   }
   /**
-   * The span of time covered by the day, month or year containing this date in Nepal, for
+   * The span of time covered by the day, week, month or year containing this date in Nepal, for
    * querying timestamps: `WHERE created_at >= start AND created_at < end`. `end` is the start
    * of the next period, so nothing falls between two ranges. An end of 23:59:59 would miss
    * rows stamped 23:59:59.5. Pass `offsetMinutes` for a fixed UTC offset instead, and `as`
-   * to get the bounds as ISO strings or epoch ms.
+   * to get the bounds as ISO strings or epoch ms. Weeks start on Sunday unless `weekStartsOn`
+   * says otherwise.
    */
   range<F extends InstantFormat = "date">(
     unit: RangeUnit,
     options?: RangeOptions<F>,
   ): InstantRange<InstantFormatTypes[F]> {
-    const [first, next] = this.periodDays(unit);
+    const [first, next] = this.periodDays(unit, options);
     return dayRange(first, next, options);
   }
   /**
-   * The AD dates of the day, month or year containing this date, for DATE columns:
+   * The AD dates of the day, week, month or year containing this date, for DATE columns:
    * `WHERE sale_date >= start AND sale_date < end`. `end` is the AD date after the period's
-   * last day. No time zone is involved, so the server's zone can't shift the dates.
+   * last day. No time zone is involved, so the server's zone can't shift the dates. Weeks start
+   * on Sunday unless `weekStartsOn` says otherwise.
    */
-  adRange(unit: RangeUnit): AdDateRange {
-    const [first, next] = this.periodDays(unit);
+  adRange(unit: RangeUnit, options?: WeekOptions): AdDateRange {
+    const [first, next] = this.periodDays(unit, options);
     return { start: adDateString(first), end: adDateString(next) };
   }
   /** Day numbers of the first day of the period containing this date and of the day after it. */
-  private periodDays(unit: RangeUnit): [number, number] {
+  private periodDays(unit: RangeUnit, options?: WeekOptions): [number, number] {
+    const [first, next] = this.periodBounds(unit, options);
+    // Only a week can run past the table: it starts and ends on a Saturday, so a few weeks at
+    // each end do. Months and years always fit.
+    if (first < 0 || next > TOTAL_DAYS) {
+      throw new RangeError(
+        `The week containing ${this} runs outside the supported range ` +
+          `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
+      );
+    }
+    return [first, next];
+  }
+  /** Like periodDays, without checking that a week fits in the table. For comparing dates. */
+  private periodBounds(unit: RangeUnit, options?: WeekOptions): [number, number] {
+    const weekStartsOn = options?.weekStartsOn ?? 0;
+    if (!Number.isInteger(weekStartsOn) || weekStartsOn < 0 || weekStartsOn > 6) {
+      throw new RangeError(
+        `weekStartsOn must be 0 (Sunday) to 6 (Saturday), got ${String(weekStartsOn)}`,
+      );
+    }
     switch (unit) {
       case "day":
         return [this.days, this.days + 1];
+      case "week": {
+        const first = this.days - ((this.dayOfWeek - weekStartsOn + 7) % 7);
+        return [first, first + 7];
+      }
       case "month": {
         const first = this.days - this.day + 1;
         return [first, first + this.daysInMonth];
@@ -388,7 +623,9 @@ export class NepaliDate {
       case "year":
         return [YEAR_START[this.year - FIRST_YEAR], YEAR_START[this.year - FIRST_YEAR + 1]];
       default:
-        throw new RangeError(`unit must be "day", "month" or "year", got ${JSON.stringify(unit)}`);
+        throw new RangeError(
+          `unit must be "day", "week", "month" or "year", got ${JSON.stringify(unit)}`,
+        );
     }
   }
   toAdString(): string {
