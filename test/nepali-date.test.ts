@@ -2,7 +2,12 @@ import { inspect } from "node:util";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
-import { type FiscalYear, type InstantRange, NepaliDate } from "../src/nepali-date.js";
+import {
+  type FiscalQuarter,
+  type FiscalYear,
+  type InstantRange,
+  NepaliDate,
+} from "../src/nepali-date.js";
 
 describe("NepaliDate construction", () => {
   it("accepts valid dates", () => {
@@ -341,6 +346,124 @@ describe("fiscal year ranges", () => {
     expect(NepaliDate.MIN_DATE.isSame(new NepaliDate(FIRST_YEAR, 4, 1), "fiscalYear")).toBe(false);
     expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 4, 1), "fiscalYear")).toBe(true);
     expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 3, 1), "fiscalYear")).toBe(false);
+  });
+});
+
+describe("fiscal quarters", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+  // The quarters of fiscal year 2083/84: a date in each, its first and last days, the moments
+  // they start and the AD dates they cover. Quarter 4 is in BS 2084.
+  const quarters = [
+    {
+      quarter: 1,
+      date: "2083-06-26",
+      first: "2083-04-01",
+      last: "2083-06-31",
+      instants: ["2026-07-16T18:15:00.000Z", "2026-10-17T18:15:00.000Z"],
+      ad: { start: "2026-07-17", end: "2026-10-18" },
+    },
+    {
+      quarter: 2,
+      date: "2083-08-10",
+      first: "2083-07-01",
+      last: "2083-09-30",
+      instants: ["2026-10-17T18:15:00.000Z", "2027-01-14T18:15:00.000Z"],
+      ad: { start: "2026-10-18", end: "2027-01-15" },
+    },
+    {
+      quarter: 3,
+      date: "2083-11-05",
+      first: "2083-10-01",
+      last: "2083-12-30",
+      instants: ["2027-01-14T18:15:00.000Z", "2027-04-13T18:15:00.000Z"],
+      ad: { start: "2027-01-15", end: "2027-04-14" },
+    },
+    {
+      quarter: 4,
+      date: "2084-02-01",
+      first: "2084-01-01",
+      last: "2084-03-32",
+      instants: ["2027-04-13T18:15:00.000Z", "2027-07-16T18:15:00.000Z"],
+      ad: { start: "2027-04-14", end: "2027-07-17" },
+    },
+  ];
+
+  it.each(quarters)("gives quarter $quarter from $first to $last", (q) => {
+    for (const text of [q.first, q.date, q.last]) {
+      const date = NepaliDate.parse(text);
+      expect(date.fiscalQuarter(), text).toBe(q.quarter);
+      expect(date.fiscalYear().label, text).toBe("2083/84");
+      expect(date.startOf("fiscalQuarter").toString(), text).toBe(q.first);
+      expect(date.endOf("fiscalQuarter").toString(), text).toBe(q.last);
+      expect(iso(date.range("fiscalQuarter")), text).toEqual(q.instants);
+      expect(date.adRange("fiscalQuarter"), text).toEqual(q.ad);
+    }
+  });
+
+  it("numbers the months from Shrawan, three to a quarter", () => {
+    const byMonth = Array.from({ length: 12 }, (_, i) => new NepaliDate(2083, i + 1, 1));
+    expect(byMonth.map((date) => date.fiscalQuarter())).toEqual([
+      4, 4, 4, 1, 1, 1, 2, 2, 2, 3, 3, 3,
+    ]);
+    expectTypeOf(byMonth[0].fiscalQuarter()).toEqualTypeOf<FiscalQuarter>();
+  });
+
+  it("covers every month in the table with quarters back to back that make up each fiscal year", () => {
+    let previous: NepaliDate | undefined;
+    for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
+      for (const firstMonth of [1, 4, 7, 10]) {
+        const first = new NepaliDate(year, firstMonth, 1);
+        const last = first.endOf("fiscalQuarter");
+        const label = `${year}-${firstMonth}`;
+        expect(last.month, label).toBe(firstMonth + 2);
+        expect(last.day, label).toBe(last.daysInMonth);
+        expect(last.startOf("fiscalQuarter"), label).toEqual(first);
+        expect(first.range("fiscalQuarter"), label).toEqual(NepaliDate.rangeBetween(first, last));
+        expect(first.adRange("fiscalQuarter"), label).toEqual(
+          NepaliDate.adRangeBetween(first, last),
+        );
+        if (previous) expect(previous.addDays(1), label).toEqual(first);
+        previous = last;
+      }
+      if (year < LAST_YEAR) {
+        // A whole fiscal year runs from the start of its Q1 to the end of its Q4.
+        const shrawan1 = new NepaliDate(year, 4, 1);
+        expect(shrawan1.startOf("fiscalYear"), String(year)).toEqual(
+          shrawan1.startOf("fiscalQuarter"),
+        );
+        expect(shrawan1.endOf("fiscalYear"), String(year)).toEqual(
+          new NepaliDate(year + 1, 1, 1).endOf("fiscalQuarter"),
+        );
+      }
+    }
+    expect(previous).toEqual(NepaliDate.MAX_DATE);
+  });
+
+  it("works at both ends of the table, where fiscal years don't", () => {
+    expect(NepaliDate.MIN_DATE.fiscalQuarter()).toBe(4);
+    expect(NepaliDate.MIN_DATE.startOf("fiscalQuarter")).toEqual(NepaliDate.MIN_DATE);
+    expect(NepaliDate.MIN_DATE.range("fiscalQuarter").start).toEqual(
+      NepaliDate.MIN_DATE.startInstant(),
+    );
+    expect(NepaliDate.MAX_DATE.fiscalQuarter()).toBe(3);
+    expect(NepaliDate.MAX_DATE.endOf("fiscalQuarter")).toEqual(NepaliDate.MAX_DATE);
+    expect(NepaliDate.MAX_DATE.range("fiscalQuarter").end.toISOString()).toBe(
+      "2030-04-13T18:15:00.000Z",
+    );
+    expect(NepaliDate.MAX_DATE.adRange("fiscalQuarter").end).toBe("2030-04-14");
+  });
+
+  it("compares with isSame", () => {
+    const bs = NepaliDate.parse;
+    expect(bs("2083-04-01").isSame(bs("2083-06-31"), "fiscalQuarter")).toBe(true);
+    expect(bs("2083-06-31").isSame(bs("2083-07-01"), "fiscalQuarter")).toBe(false);
+    expect(bs("2083-03-32").isSame(bs("2083-04-01"), "fiscalQuarter")).toBe(false);
+    expect(bs("2083-12-30").isSame(bs("2084-01-01"), "fiscalQuarter")).toBe(false);
+    // The same quarter number in another fiscal year is another quarter.
+    expect(bs("2083-04-01").isSame(bs("2084-04-01"), "fiscalQuarter")).toBe(false);
   });
 });
 
@@ -739,7 +862,7 @@ describe("range", () => {
 
   it("rejects unknown units", () => {
     expect(() => new NepaliDate(2083, 7, 1).range("quarter" as never)).toThrow(
-      /unit must be "day", "week", "month", "year" or "fiscalYear", got "quarter"/,
+      /unit must be "day", "week", "month", "fiscalQuarter", "year" or "fiscalYear", got "quarter"/,
     );
   });
 });

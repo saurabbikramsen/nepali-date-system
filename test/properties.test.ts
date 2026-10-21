@@ -143,10 +143,11 @@ describe("comparison", () => {
     );
   });
 
-  it("a date is in its own day, month, year and fiscal year, from startOf to endOf", () => {
-    const unit = fc.constantFrom<"day" | "month" | "year" | "fiscalYear">(
+  it("a date is in its own day, month, fiscal quarter, year and fiscal year, from startOf to endOf", () => {
+    const unit = fc.constantFrom<"day" | "month" | "fiscalQuarter" | "year" | "fiscalYear">(
       "day",
       "month",
+      "fiscalQuarter",
       "year",
       "fiscalYear",
     );
@@ -159,6 +160,12 @@ describe("comparison", () => {
         const end = d.endOf(unit);
         expect(d.isBetween(start, end)).toBe(true);
         expect(start.isSame(d, unit) && end.isSame(d, unit)).toBe(true);
+        if (unit === "fiscalQuarter") {
+          expect([start.fiscalQuarter(), end.fiscalQuarter()]).toEqual([
+            d.fiscalQuarter(),
+            d.fiscalQuarter(),
+          ]);
+        }
         if (!start.isEqual(NepaliDate.MIN_DATE)) {
           expect(start.addDays(-1).isSame(d, unit)).toBe(false);
         }

@@ -81,8 +81,9 @@ export interface InstantOptions {
 /**
  * The calendar periods that NepaliDate#range, startOf and endOf cover. A "year" runs from
  * Baisakh 1 and a "fiscalYear" from Shrawan 1, each to the day before the next one starts.
+ * A "fiscalQuarter" is three months: Shrawan–Aswin, Kartik–Poush, Magh–Chaitra or Baisakh–Asar.
  */
-export type RangeUnit = "day" | "week" | "month" | "year" | "fiscalYear";
+export type RangeUnit = "day" | "week" | "month" | "fiscalQuarter" | "year" | "fiscalYear";
 
 /** A weekday number: 0 is Sunday, 6 is Saturday. */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -137,6 +138,9 @@ export interface FiscalYear {
   /** startYear and the last two digits of endYear, as written in Nepal: "2083/84". */
   label: string;
 }
+
+/** A fiscal quarter: 1 is Shrawan–Aswin, 2 Kartik–Poush, 3 Magh–Chaitra and 4 Baisakh–Asar. */
+export type FiscalQuarter = 1 | 2 | 3 | 4;
 
 /** Shrawan, the first month of the fiscal year. */
 const FISCAL_YEAR_FIRST_MONTH = 4;
@@ -458,6 +462,17 @@ export class NepaliDate {
     const endYear = startYear + 1;
     return { startYear, endYear, label: `${startYear}/${pad2(endYear % 100)}` };
   }
+  /**
+   * The quarter of its fiscal year this date falls in: 1 for Shrawan–Aswin, 2 for Kartik–Poush,
+   * 3 for Magh–Chaitra and 4 for Baisakh–Asar. Quarter 4 belongs to the fiscal year that began
+   * the year before, as fiscalYear says. For its first and last days and its span of time, pass
+   * "fiscalQuarter" to startOf, endOf, range and adRange.
+   */
+  fiscalQuarter(): FiscalQuarter {
+    // Months since Shrawan, 0–11, three to a quarter.
+    const fiscalMonth = (this.month - FISCAL_YEAR_FIRST_MONTH + 12) % 12;
+    return (Math.floor(fiscalMonth / 3) + 1) as FiscalQuarter;
+  }
 
   // ----------comparison----------
   /**
@@ -503,10 +518,10 @@ export class NepaliDate {
     return this.days === checkDate(other, "isEqual").days;
   }
   /**
-   * Whether this date and `other` fall in the same day, week, month, year or fiscal year:
-   * 2083-07-01 and 2083-07-30 are the same month but not the same week, and 2083-12-30 and
-   * 2084-01-01 are the same fiscal year but not the same year. Weeks start on Sunday unless
-   * `weekStartsOn` says otherwise.
+   * Whether this date and `other` fall in the same period of a RangeUnit: 2083-07-01 and
+   * 2083-07-30 are the same month but not the same week, and 2083-12-30 and 2084-01-01 are the
+   * same fiscal year but not the same year. Weeks start on Sunday unless `weekStartsOn` says
+   * otherwise.
    */
   isSame(other: NepaliDate, unit: RangeUnit, options?: WeekOptions): boolean {
     checkDate(other, "isSame");
@@ -555,19 +570,20 @@ export class NepaliDate {
     return this.shiftMonths(years, 12, "years");
   }
   /**
-   * The first day of the week, month, year or fiscal year containing this date, as a new
-   * NepaliDate: Sunday for a week unless `weekStartsOn` says otherwise, Baisakh 1 for a year,
-   * Shrawan 1 for a fiscal year. "day" gives the same date. For the moment a period starts,
-   * use range or startInstant.
+   * The first day of the period of a RangeUnit containing this date, as a new NepaliDate:
+   * Sunday for a week unless `weekStartsOn` says otherwise, day 1 of Shrawan, Kartik, Magh or
+   * Baisakh for a fiscal quarter, Baisakh 1 for a year, Shrawan 1 for a fiscal year. "day" gives
+   * the same date. For the moment a period starts, use range or startInstant.
    */
   startOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
     return NepaliDate.fromDays(this.periodDays(unit, options)[0]);
   }
   /**
-   * The last day of the week, month, year or fiscal year containing this date, as a new
-   * NepaliDate: Saturday for a week starting on Sunday, day 29–32 of the month, the last day of
-   * Chaitra for a year or of Asar for a fiscal year. "day" gives the same date. This is a date, not a time; to query timestamps up to the end of a
-   * period, use range, whose end is the next period's start.
+   * The last day of the period of a RangeUnit containing this date, as a new NepaliDate:
+   * Saturday for a week starting on Sunday, day 29–32 of the month, the last day of Aswin,
+   * Poush, Chaitra or Asar for a fiscal quarter, of Chaitra for a year and of Asar for a fiscal
+   * year. "day" gives the same date. This is a date, not a time; to query timestamps up to the
+   * end of a period, use range, whose end is the next period's start.
    */
   endOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
     return NepaliDate.fromDays(this.periodDays(unit, options)[1] - 1);
@@ -608,8 +624,8 @@ export class NepaliDate {
     return new Date(daysToStartInstant(this.days, overrideOffsetMs(options)));
   }
   /**
-   * The span of time covered by the day, week, month, year or fiscal year containing this date
-   * in Nepal, for querying timestamps: `WHERE created_at >= start AND created_at < end`. `end` is the start
+   * The span of time covered by the period of a RangeUnit containing this date in Nepal, for
+   * querying timestamps: `WHERE created_at >= start AND created_at < end`. `end` is the start
    * of the next period, so nothing falls between two ranges. An end of 23:59:59 would miss
    * rows stamped 23:59:59.5. Pass `offsetMinutes` for a fixed UTC offset instead, and `as`
    * to get the bounds as ISO strings or epoch ms. Weeks start on Sunday unless `weekStartsOn`
@@ -623,8 +639,7 @@ export class NepaliDate {
     return dayRange(first, next, options);
   }
   /**
-   * The AD dates of the day, week, month, year or fiscal year containing this date, for DATE
-   * columns:
+   * The AD dates of the period of a RangeUnit containing this date, for DATE columns:
    * `WHERE sale_date >= start AND sale_date < end`. `end` is the AD date after the period's
    * last day. No time zone is involved, so the server's zone can't shift the dates. Weeks start
    * on Sunday unless `weekStartsOn` says otherwise.
@@ -636,8 +651,9 @@ export class NepaliDate {
   /** Day numbers of the first day of the period containing this date and of the day after it. */
   private periodDays(unit: RangeUnit, options?: WeekOptions): [number, number] {
     const [first, next] = this.periodBounds(unit, options);
-    // Months and years always fit. A few weeks at each end run past the table, which starts
-    // and ends on a Saturday, and so do the fiscal years that began before it and end after it.
+    // Months, fiscal quarters and years always fit. A few weeks at each end run past the table,
+    // which starts and ends on a Saturday, and so do the fiscal years that began before it and
+    // end after it.
     if (first < 0 || next > TOTAL_DAYS) {
       const period = unit === "week" ? "week" : `fiscal year ${this.fiscalYear().label}`;
       throw new RangeError(
@@ -666,6 +682,16 @@ export class NepaliDate {
         const first = this.days - this.day + 1;
         return [first, first + this.daysInMonth];
       }
+      case "fiscalQuarter": {
+        // Fiscal quarters start in Baisakh, Shrawan, Kartik and Magh, the BS year's own quarters,
+        // so none crosses from Chaitra into Baisakh.
+        const firstMonth = this.month - ((this.month - 1) % 3);
+        const next =
+          firstMonth === 10
+            ? YEAR_START[this.year - FIRST_YEAR + 1]
+            : bsToDays(this.year, firstMonth + 3, 1);
+        return [bsToDays(this.year, firstMonth, 1), next];
+      }
       case "year":
         return [YEAR_START[this.year - FIRST_YEAR], YEAR_START[this.year - FIRST_YEAR + 1]];
       case "fiscalYear": {
@@ -674,7 +700,7 @@ export class NepaliDate {
       }
       default:
         throw new RangeError(
-          `unit must be "day", "week", "month", "year" or "fiscalYear", got ${JSON.stringify(unit)}`,
+          `unit must be "day", "week", "month", "fiscalQuarter", "year" or "fiscalYear", got ${JSON.stringify(unit)}`,
         );
     }
   }

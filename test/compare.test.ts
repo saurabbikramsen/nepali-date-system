@@ -84,7 +84,7 @@ describe("isSame", () => {
     for (let i = 0; i < 400; i += 3) {
       const x = first.addDays(i);
       const y = first.addDays(i + 5);
-      for (const unit of ["day", "week", "month", "year", "fiscalYear"] as const) {
+      for (const unit of ["day", "week", "month", "fiscalQuarter", "year", "fiscalYear"] as const) {
         expect(x.isSame(y, unit), `${x} ${y} ${unit}`).toBe(
           x.startOf(unit).isEqual(y.startOf(unit)),
         );
@@ -101,7 +101,7 @@ describe("isSame", () => {
 
   it("rejects unknown units, bad weekStartsOn and non-dates", () => {
     expect(() => kartik(1).isSame(kartik(2), "quarter" as never)).toThrow(
-      /unit must be "day", "week", "month", "year" or "fiscalYear"/,
+      /unit must be "day", "week", "month", "fiscalQuarter", "year" or "fiscalYear"/,
     );
     expect(() => kartik(1).isSame(kartik(2), "week", { weekStartsOn: 7 as never })).toThrow(
       /weekStartsOn must be 0/,

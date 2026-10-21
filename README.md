@@ -2,7 +2,7 @@
 
 Bikram Sambat (BS, the Nepali calendar) dates for JavaScript and TypeScript. Converts between BS and AD using a month-length table checked against published panchangs and dated historical documents.
 
-It also gives you today's date in Nepal on a server in any time zone, and the exact start and end of Nepali days, months and years for database queries. It adds and compares dates, and formats and parses them in English or Nepali, with 0–9 or Devanagari digits. Fiscal-year helpers are planned for a later release.
+It also gives you today's date in Nepal on a server in any time zone, and the exact start and end of Nepali days, months, years, fiscal years and fiscal quarters for database queries. It adds and compares dates, and formats and parses them in English or Nepali, with 0–9 or Devanagari digits.
 
 ## Why this library
 
@@ -70,15 +70,19 @@ date.daysInMonth; // 31
 date.daysInYear; // 365
 ```
 
-Nepal's fiscal year runs from Shrawan 1 to the last day of Asar, so Baisakh to Asar belong to the fiscal year that began the year before:
+Nepal's fiscal year runs from Shrawan 1 to the last day of Asar, so Baisakh to Asar belong to the fiscal year that began the year before. Its quarters are Shrawan–Aswin (1), Kartik–Poush (2), Magh–Chaitra (3) and Baisakh–Asar (4):
 
 ```ts
 date.fiscalYear(); // { startYear: 2083, endYear: 2084, label: "2083/84" }
-new NepaliDate(2084, 3, 15).fiscalYear().label; // "2083/84"
-new NepaliDate(2084, 4, 1).fiscalYear().label; // "2084/85"
+date.fiscalQuarter(); // 1
+`Q${date.fiscalQuarter()} ${date.fiscalYear().label}`; // "Q1 2083/84"
+
+const asar = new NepaliDate(2084, 3, 15);
+asar.fiscalYear().label; // "2083/84"
+asar.fiscalQuarter(); // 4
 ```
 
-To query a whole fiscal year, see [Fiscal years](#fiscal-years).
+To query a whole fiscal year or quarter, see [Fiscal years and quarters](#fiscal-years-and-quarters).
 
 ### Storing and sending dates
 
@@ -114,7 +118,7 @@ date.addDays(10); // 2083-07-25
 date.addWeeks(-1); // 2083-07-08
 date.addMonths(1); // 2083-08-15
 date.addYears(1); // 2084-07-15
-date.startOf("month"); // 2083-07-01, also "week", "year" and "fiscalYear"
+date.startOf("month"); // 2083-07-01, also "week", "fiscalQuarter", "year" and "fiscalYear"
 date.endOf("month"); // 2083-07-30
 ```
 
@@ -126,7 +130,7 @@ To compare dates, use these methods rather than `<` or `===`, which compare obje
 a.isBefore(b);
 a.isAfter(b);
 a.isEqual(b);
-a.isSame(b, "month"); // also "day", "week", "year" and "fiscalYear"
+a.isSame(b, "month"); // also "day", "week", "fiscalQuarter", "year" and "fiscalYear"
 date.isBetween(from, to); // both ends included
 
 dates.sort(NepaliDate.compare); // oldest first
@@ -289,7 +293,7 @@ The offset is in minutes east of UTC: `345` is +05:45 and `-240` is −04:00. Th
 A Nepali day, week, month or year starts at midnight in Kathmandu, which is 18:15 UTC the day before. `range` gives the exact start and end of the period as moments in time, so you can filter timestamp columns by Nepali dates:
 
 ```ts
-const { start, end } = NepaliDate.today().range("month"); // also "day", "week", "year" and "fiscalYear"
+const { start, end } = NepaliDate.today().range("month"); // also "day", "week", "fiscalQuarter", "year" and "fiscalYear"
 // WHERE created_at >= start AND created_at < end
 ```
 
@@ -297,22 +301,26 @@ Weeks run Sunday to Saturday, because Sunday starts Nepal's working week. Pass `
 
 The range is half-open: `start` is included and `end` is excluded, because `end` is the first moment of the next period. Always query with `>= start AND < end`. For any span of whole days, use `NepaliDate.rangeBetween(from, to)`, which includes both `from` and `to`.
 
-### Fiscal years
+### Fiscal years and quarters
 
-Pass `"fiscalYear"` for Nepal's fiscal year, from Shrawan 1 to the last day of Asar. Any date in the fiscal year gives the same result:
+Pass `"fiscalYear"` for Nepal's fiscal year, from Shrawan 1 to the last day of Asar, and `"fiscalQuarter"` for one of its three-month quarters. Any date in the period gives the same result:
 
 ```ts
-const fy = new NepaliDate(2083, 4, 1); // fiscal year 2083/84
+const date = new NepaliDate(2083, 4, 1); // fiscal year 2083/84, quarter 1
 
-fy.range("fiscalYear"); // { start: 2026-07-16T18:15:00.000Z, end: 2027-07-16T18:15:00.000Z }
-fy.adRange("fiscalYear"); // { start: "2026-07-17", end: "2027-07-17" }
-fy.startOf("fiscalYear"); // 2083-04-01
-fy.endOf("fiscalYear"); // 2084-03-32
+date.range("fiscalYear"); // { start: 2026-07-16T18:15:00.000Z, end: 2027-07-16T18:15:00.000Z }
+date.adRange("fiscalYear"); // { start: "2026-07-17", end: "2027-07-17" }
+date.startOf("fiscalYear"); // 2083-04-01
+date.endOf("fiscalYear"); // 2084-03-32
 
-NepaliDate.today().range("fiscalYear"); // the current fiscal year
+date.range("fiscalQuarter"); // { start: 2026-07-16T18:15:00.000Z, end: 2026-10-17T18:15:00.000Z }
+date.adRange("fiscalQuarter"); // { start: "2026-07-17", end: "2026-10-18" }
+date.endOf("fiscalQuarter"); // 2083-06-31
+
+NepaliDate.today().range("fiscalQuarter"); // the current fiscal quarter
 ```
 
-Fiscal years 1974/75 and 2086/87 run past the [supported range](#supported-range), so their ranges throw a `RangeError`.
+Fiscal years 1974/75 and 2086/87 run past the [supported range](#supported-range), so their ranges throw a `RangeError`. Their quarters inside the range still work.
 
 ### Why not `BETWEEN … 23:59:59`?
 

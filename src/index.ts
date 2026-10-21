@@ -6,6 +6,7 @@ export type { MonthName } from "./defined.js";
 export type { DateParts } from "./core/days.js";
 export type {
   AdDateRange,
+  FiscalQuarter,
   FiscalYear,
   InstantFormat,
   InstantFormatTypes,
