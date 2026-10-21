@@ -1,6 +1,6 @@
 {
   "name": "nepali-date-system",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Nepali date converter and Bikram Sambat calendar for JavaScript and TypeScript: BS to AD and AD to BS, today's date in Nepal on any server, database query ranges, date arithmetic, and formatting in English or Nepali (Devanagari)",
   "keywords": [
     "nepali",
