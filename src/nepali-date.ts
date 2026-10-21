@@ -317,7 +317,10 @@ export interface Age {
   years: number;
   /** Full months after the years, 0–11. */
   months: number;
-  /** Days after the years and months, 0 to one less than the length of a month. */
+  /**
+   * Days after the years and months, 0–31: always fewer than the days to the next monthly
+   * birthday. It can be 31 when that birthday is a 32nd day.
+   */
   days: number;
 }
 

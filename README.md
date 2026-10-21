@@ -477,6 +477,128 @@ await db
   .where(and(gte(sales.saleDate, start), lt(sales.saleDate, end)));
 ```
 
+## Recipes
+
+These use node-postgres with a `timestamptz` column. For other databases, swap in the query from [Database queries](#database-queries); the dates work the same way.
+
+### Monthly sales report
+
+One row per Nepali month of the fiscal year so far, each month counted from midnight in Kathmandu:
+
+```ts
+const today = NepaliDate.today();
+const months = NepaliDate.eachMonth(today.startOf("fiscalYear"), today);
+
+const report = await Promise.all(
+  months.map(async (month) => {
+    const { start, end } = month.range("month");
+    const { rows } = await pool.query(
+      "SELECT coalesce(sum(amount), 0) AS total, count(*) AS orders FROM sales WHERE created_at >= $1 AND created_at < $2",
+      [start, end],
+    );
+    return {
+      month: month.format("MMMM YYYY"), // "Shrawan 2083", or "साउन २०८३" with { locale: "ne" }
+      total: Number(rows[0].total),
+      orders: Number(rows[0].orders),
+    };
+  }),
+);
+```
+
+The last row is the current month to date. node-postgres returns `sum` and `count` as strings, hence `Number`.
+
+That's one query per month. For a longer period, or daily figures, let the database group by the AD date in Kathmandu and add the days up by Nepali month:
+
+```ts
+const { start, end } = today.range("fiscalYear");
+const { rows } = await pool.query(
+  `SELECT (created_at AT TIME ZONE 'Asia/Kathmandu')::date::text AS day, sum(amount) AS total
+   FROM sales WHERE created_at >= $1 AND created_at < $2
+   GROUP BY 1 ORDER BY 1`,
+  [start, end],
+);
+
+const totals = new Map<string, number>();
+for (const { day, total } of rows) {
+  const month = NepaliDate.fromAd(day).format("MMMM YYYY"); // day is "2026-07-17"
+  totals.set(month, (totals.get(month) ?? 0) + Number(total));
+}
+```
+
+`Asia/Kathmandu` includes Nepal's +05:30 offset before 1986, as `range` does.
+
+### Fiscal-year filter
+
+Let users pick a fiscal year such as `2082/83`, and filter by it:
+
+```ts
+const current = NepaliDate.today().fiscalYear().startYear;
+const choices = Array.from(
+  { length: 5 },
+  (_, i) => new NepaliDate(current - i, 4, 1).fiscalYear().label,
+);
+// ["2083/84", "2082/83", "2081/82", "2080/81", "2079/80"]
+
+/** The span of a fiscal year written like "2082/83". */
+function fiscalYearRange(label: string) {
+  const match = /^(\d{4})\/(\d{2})$/.exec(label);
+  if (!match || (Number(match[1]) + 1) % 100 !== Number(match[2])) {
+    throw new RangeError(`Expected a fiscal year like 2082/83, got ${JSON.stringify(label)}`);
+  }
+  // Shrawan 1 is the first day; any date in the fiscal year gives the same range.
+  return new NepaliDate(Number(match[1]), 4, 1).range("fiscalYear");
+}
+
+const { start, end } = fiscalYearRange("2082/83"); // 2025-07-16T18:15Z to 2026-07-16T18:15Z
+await pool.query("SELECT * FROM invoices WHERE issued_at >= $1 AND issued_at < $2", [start, end]);
+```
+
+A fiscal year outside the [supported range](#supported-range) also throws a `RangeError`, and so does 2086/87, which runs past its end.
+
+Variations on the same pattern:
+
+```ts
+const fy = new NepaliDate(2082, 4, 1);
+
+fy.addMonths(3).range("fiscalQuarter"); // quarter 2: Kartik–Poush 2082
+fy.addMonths(8).range("chaumasik"); // the third chaumasik: Chaitra 2082–Asar 2083
+fy.adRange("fiscalYear"); // { start: "2025-07-17", end: "2026-07-17" } for a DATE column
+
+const today = NepaliDate.today();
+NepaliDate.rangeBetween(today.startOf("fiscalYear"), today); // fiscal year to date
+```
+
+If your fiscal year starts in Baisakh, pass `{ fiscalYearStartMonth: 1 }` to `range`; the labels are then just the year, such as `2083`.
+
+### Age check
+
+Check a minimum age from a BS date of birth typed into a form:
+
+```ts
+function checkAge(birthText: string, minimumAge: number, onDate = NepaliDate.today()) {
+  let birthDate: NepaliDate;
+  try {
+    birthDate = NepaliDate.parse(birthText); // "2065-04-15", or "२०६५-०४-१५"
+  } catch {
+    return { ok: false, error: "Enter the date of birth in BS, like 2065-04-15" };
+  }
+  if (birthDate.isAfter(onDate)) {
+    return { ok: false, error: "The date of birth is in the future" };
+  }
+  const { years } = NepaliDate.age(birthDate, onDate);
+  if (years < minimumAge) {
+    return { ok: false, error: `You must be ${minimumAge} or older` };
+  }
+  return { ok: true, years };
+}
+
+checkAge("2065-04-15", 18); // { ok: true, years: 18 }
+```
+
+Pass `onDate` to check the age on another date, such as the last day to apply when a vacancy has an age limit: `checkAge(text, 18, NepaliDate.parse("2083-08-15"))`.
+
+`birthDate.addYears(18)` is the day someone turns 18, which you can show to applicants who are too young. It throws a `RangeError` if that day is after 2086, the end of the [supported range](#supported-range). `addYears` and `age` agree on birthdays, including ones on a day the month lacks: someone born on `2067-03-32` turns 18 on `2085-03-31`, because Asar 2085 has 31 days. On `2085-03-30` they're 17.
+
 ## Supported range
 
 |                     | BS         | AD         |
