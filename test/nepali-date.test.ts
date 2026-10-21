@@ -242,6 +242,108 @@ describe("fiscalYear", () => {
   });
 });
 
+describe("fiscal year ranges", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+  // Every day of fiscal year 2083/84, from its first day to its last.
+  const fy2083 = ["2083-04-01", "2083-06-26", "2083-12-30", "2084-01-01", "2084-03-32"];
+
+  it("gives the moments Shrawan 1 starts in Kathmandu, this year and next", () => {
+    for (const text of fy2083) {
+      expect(iso(NepaliDate.parse(text).range("fiscalYear")), text).toEqual([
+        "2026-07-16T18:15:00.000Z",
+        "2027-07-16T18:15:00.000Z",
+      ]);
+    }
+  });
+
+  it("gives the AD dates of Shrawan 1, this year and next", () => {
+    for (const text of fy2083) {
+      expect(NepaliDate.parse(text).adRange("fiscalYear"), text).toEqual({
+        start: "2026-07-17",
+        end: "2027-07-17",
+      });
+    }
+  });
+
+  it("gives Shrawan 1 and the last day of Asar as startOf and endOf", () => {
+    for (const text of fy2083) {
+      const date = NepaliDate.parse(text);
+      expect(date.startOf("fiscalYear").toString(), text).toBe("2083-04-01");
+      expect(date.endOf("fiscalYear").toString(), text).toBe("2084-03-32");
+    }
+  });
+
+  it("uses each end's own offset across the 1986 change", () => {
+    // Fiscal year 2042/43 started at +05:30 and ended at +05:45.
+    expect(iso(new NepaliDate(2042, 6, 1).range("fiscalYear"))).toEqual([
+      "1985-07-15T18:30:00.000Z",
+      "1986-07-15T18:15:00.000Z",
+    ]);
+  });
+
+  it("takes the same options as the other units", () => {
+    const date = new NepaliDate(2083, 6, 26);
+    expect(date.range("fiscalYear", { as: "iso" })).toEqual({
+      start: "2026-07-16T18:15:00.000Z",
+      end: "2027-07-16T18:15:00.000Z",
+    });
+    expect(date.range("fiscalYear", { as: "ms", offsetMinutes: 0 })).toEqual({
+      start: Date.UTC(2026, 6, 17),
+      end: Date.UTC(2027, 6, 17),
+    });
+  });
+
+  it("covers every whole fiscal year in the table back to back, matching rangeBetween", () => {
+    for (let year = FIRST_YEAR; year < LAST_YEAR; year++) {
+      const shrawan1 = new NepaliDate(year, 4, 1);
+      const nextShrawan1 = new NepaliDate(year + 1, 4, 1);
+      const lastAsar = nextShrawan1.addDays(-1);
+      const label = `${year}/${year + 1}`;
+      expect(lastAsar.month, label).toBe(3);
+      expect(lastAsar.endOf("fiscalYear"), label).toEqual(lastAsar);
+      expect(lastAsar.startOf("fiscalYear"), label).toEqual(shrawan1);
+      expect(shrawan1.range("fiscalYear"), label).toEqual(
+        NepaliDate.rangeBetween(shrawan1, lastAsar),
+      );
+      expect(lastAsar.adRange("fiscalYear"), label).toEqual({
+        start: shrawan1.toAdString(),
+        end: nextShrawan1.toAdString(),
+      });
+    }
+  });
+
+  it("rejects the fiscal years that run past either end of the table", () => {
+    expect(() => NepaliDate.MIN_DATE.range("fiscalYear")).toThrow(
+      /fiscal year 1974\/75 containing 1975-01-01 runs outside the supported range/,
+    );
+    expect(() => new NepaliDate(FIRST_YEAR, 3, 1).adRange("fiscalYear")).toThrow(RangeError);
+    expect(() => NepaliDate.MAX_DATE.adRange("fiscalYear")).toThrow(
+      /fiscal year 2086\/87 containing 2086-12-30 runs outside the supported range/,
+    );
+    expect(() => new NepaliDate(LAST_YEAR, 4, 1).startOf("fiscalYear")).toThrow(RangeError);
+    // The first and last whole fiscal years still work.
+    expect(new NepaliDate(FIRST_YEAR, 4, 1).startOf("fiscalYear").toString()).toBe("1975-04-01");
+    const lastAsar = new NepaliDate(LAST_YEAR, 3, NepaliDate.daysInMonth(LAST_YEAR, 3));
+    expect(lastAsar.range("fiscalYear").end).toEqual(
+      new NepaliDate(LAST_YEAR, 4, 1).startInstant(),
+    );
+  });
+
+  it("compares with isSame, even past the ends of the table", () => {
+    const bs = NepaliDate.parse;
+    expect(bs("2083-12-30").isSame(bs("2084-01-01"), "fiscalYear")).toBe(true);
+    expect(bs("2083-04-01").isSame(bs("2084-03-32"), "fiscalYear")).toBe(true);
+    expect(bs("2083-03-32").isSame(bs("2083-04-01"), "fiscalYear")).toBe(false);
+    expect(NepaliDate.MIN_DATE.isSame(new NepaliDate(FIRST_YEAR, 3, 1), "fiscalYear")).toBe(true);
+    expect(NepaliDate.MIN_DATE.isSame(new NepaliDate(FIRST_YEAR, 4, 1), "fiscalYear")).toBe(false);
+    expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 4, 1), "fiscalYear")).toBe(true);
+    expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 3, 1), "fiscalYear")).toBe(false);
+  });
+});
+
 describe("serialization", () => {
   it("writes YYYY-MM-DD with a zero-padded month and day", () => {
     expect(new NepaliDate(2083, 6, 26).toString()).toBe("2083-06-26");
@@ -637,7 +739,7 @@ describe("range", () => {
 
   it("rejects unknown units", () => {
     expect(() => new NepaliDate(2083, 7, 1).range("quarter" as never)).toThrow(
-      /unit must be "day", "week", "month" or "year", got "quarter"/,
+      /unit must be "day", "week", "month", "year" or "fiscalYear", got "quarter"/,
     );
   });
 });

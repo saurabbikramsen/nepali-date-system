@@ -78,8 +78,11 @@ export interface InstantOptions {
   offsetMinutes?: number;
 }
 
-/** The calendar periods that NepaliDate#range, startOf and endOf cover. */
-export type RangeUnit = "day" | "week" | "month" | "year";
+/**
+ * The calendar periods that NepaliDate#range, startOf and endOf cover. A "year" runs from
+ * Baisakh 1 and a "fiscalYear" from Shrawan 1, each to the day before the next one starts.
+ */
+export type RangeUnit = "day" | "week" | "month" | "year" | "fiscalYear";
 
 /** A weekday number: 0 is Sunday, 6 is Saturday. */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -137,6 +140,17 @@ export interface FiscalYear {
 
 /** Shrawan, the first month of the fiscal year. */
 const FISCAL_YEAR_FIRST_MONTH = 4;
+
+/**
+ * The day number of Shrawan 1 in a BS year: -Infinity before the table and Infinity after it,
+ * where the day isn't known. Either one makes periodDays throw, and isSame still works because
+ * only one fiscal year starts before the table.
+ */
+function fiscalYearStartDay(year: number): number {
+  if (year < FIRST_YEAR) return -Infinity;
+  if (year > LAST_YEAR) return Infinity;
+  return bsToDays(year, FISCAL_YEAR_FIRST_MONTH, 1);
+}
 
 const MINUTE_MS = 60_000;
 
@@ -436,6 +450,8 @@ export class NepaliDate {
    * The Nepal fiscal year this date falls in. It starts on Shrawan 1, so Baisakh to Asar belong
    * to the fiscal year that began the year before: 2083-04-01 and 2084-03-32 are both in
    * `{ startYear: 2083, endYear: 2084, label: "2083/84" }`. Returns a new object on every call.
+   * For its first and last days and its span of time, pass "fiscalYear" to startOf, endOf,
+   * range and adRange.
    */
   fiscalYear(): FiscalYear {
     const startYear = this.month >= FISCAL_YEAR_FIRST_MONTH ? this.year : this.year - 1;
@@ -487,8 +503,9 @@ export class NepaliDate {
     return this.days === checkDate(other, "isEqual").days;
   }
   /**
-   * Whether this date and `other` fall in the same day, week, month or year: 2083-07-01 and
-   * 2083-07-30 are the same month but not the same week. Weeks start on Sunday unless
+   * Whether this date and `other` fall in the same day, week, month, year or fiscal year:
+   * 2083-07-01 and 2083-07-30 are the same month but not the same week, and 2083-12-30 and
+   * 2084-01-01 are the same fiscal year but not the same year. Weeks start on Sunday unless
    * `weekStartsOn` says otherwise.
    */
   isSame(other: NepaliDate, unit: RangeUnit, options?: WeekOptions): boolean {
@@ -538,17 +555,18 @@ export class NepaliDate {
     return this.shiftMonths(years, 12, "years");
   }
   /**
-   * The first day of the week, month or year containing this date, as a new NepaliDate: Sunday
-   * for a week unless `weekStartsOn` says otherwise, Baisakh 1 for a year. "day" gives the same
-   * date. For the moment a period starts, use range or startInstant.
+   * The first day of the week, month, year or fiscal year containing this date, as a new
+   * NepaliDate: Sunday for a week unless `weekStartsOn` says otherwise, Baisakh 1 for a year,
+   * Shrawan 1 for a fiscal year. "day" gives the same date. For the moment a period starts,
+   * use range or startInstant.
    */
   startOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
     return NepaliDate.fromDays(this.periodDays(unit, options)[0]);
   }
   /**
-   * The last day of the week, month or year containing this date, as a new NepaliDate: Saturday
-   * for a week starting on Sunday, day 29–32 of the month, or the last day of Chaitra. "day"
-   * gives the same date. This is a date, not a time; to query timestamps up to the end of a
+   * The last day of the week, month, year or fiscal year containing this date, as a new
+   * NepaliDate: Saturday for a week starting on Sunday, day 29–32 of the month, the last day of
+   * Chaitra for a year or of Asar for a fiscal year. "day" gives the same date. This is a date, not a time; to query timestamps up to the end of a
    * period, use range, whose end is the next period's start.
    */
   endOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
@@ -590,8 +608,8 @@ export class NepaliDate {
     return new Date(daysToStartInstant(this.days, overrideOffsetMs(options)));
   }
   /**
-   * The span of time covered by the day, week, month or year containing this date in Nepal, for
-   * querying timestamps: `WHERE created_at >= start AND created_at < end`. `end` is the start
+   * The span of time covered by the day, week, month, year or fiscal year containing this date
+   * in Nepal, for querying timestamps: `WHERE created_at >= start AND created_at < end`. `end` is the start
    * of the next period, so nothing falls between two ranges. An end of 23:59:59 would miss
    * rows stamped 23:59:59.5. Pass `offsetMinutes` for a fixed UTC offset instead, and `as`
    * to get the bounds as ISO strings or epoch ms. Weeks start on Sunday unless `weekStartsOn`
@@ -605,7 +623,8 @@ export class NepaliDate {
     return dayRange(first, next, options);
   }
   /**
-   * The AD dates of the day, week, month or year containing this date, for DATE columns:
+   * The AD dates of the day, week, month, year or fiscal year containing this date, for DATE
+   * columns:
    * `WHERE sale_date >= start AND sale_date < end`. `end` is the AD date after the period's
    * last day. No time zone is involved, so the server's zone can't shift the dates. Weeks start
    * on Sunday unless `weekStartsOn` says otherwise.
@@ -617,11 +636,12 @@ export class NepaliDate {
   /** Day numbers of the first day of the period containing this date and of the day after it. */
   private periodDays(unit: RangeUnit, options?: WeekOptions): [number, number] {
     const [first, next] = this.periodBounds(unit, options);
-    // Only a week can run past the table: it starts and ends on a Saturday, so a few weeks at
-    // each end do. Months and years always fit.
+    // Months and years always fit. A few weeks at each end run past the table, which starts
+    // and ends on a Saturday, and so do the fiscal years that began before it and end after it.
     if (first < 0 || next > TOTAL_DAYS) {
+      const period = unit === "week" ? "week" : `fiscal year ${this.fiscalYear().label}`;
       throw new RangeError(
-        `The week containing ${this} runs outside the supported range ` +
+        `The ${period} containing ${this} runs outside the supported range ` +
           `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
       );
     }
@@ -648,9 +668,13 @@ export class NepaliDate {
       }
       case "year":
         return [YEAR_START[this.year - FIRST_YEAR], YEAR_START[this.year - FIRST_YEAR + 1]];
+      case "fiscalYear": {
+        const { startYear, endYear } = this.fiscalYear();
+        return [fiscalYearStartDay(startYear), fiscalYearStartDay(endYear)];
+      }
       default:
         throw new RangeError(
-          `unit must be "day", "week", "month" or "year", got ${JSON.stringify(unit)}`,
+          `unit must be "day", "week", "month", "year" or "fiscalYear", got ${JSON.stringify(unit)}`,
         );
     }
   }

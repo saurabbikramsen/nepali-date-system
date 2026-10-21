@@ -78,6 +78,8 @@ new NepaliDate(2084, 3, 15).fiscalYear().label; // "2083/84"
 new NepaliDate(2084, 4, 1).fiscalYear().label; // "2084/85"
 ```
 
+To query a whole fiscal year, see [Fiscal years](#fiscal-years).
+
 ### Storing and sending dates
 
 `NepaliDate` instances are immutable. They serialize to `YYYY-MM-DD` strings, and `NepaliDate.parse` reads them back.
@@ -112,7 +114,7 @@ date.addDays(10); // 2083-07-25
 date.addWeeks(-1); // 2083-07-08
 date.addMonths(1); // 2083-08-15
 date.addYears(1); // 2084-07-15
-date.startOf("month"); // 2083-07-01, also "week" and "year"
+date.startOf("month"); // 2083-07-01, also "week", "year" and "fiscalYear"
 date.endOf("month"); // 2083-07-30
 ```
 
@@ -124,7 +126,7 @@ To compare dates, use these methods rather than `<` or `===`, which compare obje
 a.isBefore(b);
 a.isAfter(b);
 a.isEqual(b);
-a.isSame(b, "month"); // also "day", "week" and "year"
+a.isSame(b, "month"); // also "day", "week", "year" and "fiscalYear"
 date.isBetween(from, to); // both ends included
 
 dates.sort(NepaliDate.compare); // oldest first
@@ -287,13 +289,30 @@ The offset is in minutes east of UTC: `345` is +05:45 and `-240` is −04:00. Th
 A Nepali day, week, month or year starts at midnight in Kathmandu, which is 18:15 UTC the day before. `range` gives the exact start and end of the period as moments in time, so you can filter timestamp columns by Nepali dates:
 
 ```ts
-const { start, end } = NepaliDate.today().range("month"); // also "day", "week" and "year"
+const { start, end } = NepaliDate.today().range("month"); // also "day", "week", "year" and "fiscalYear"
 // WHERE created_at >= start AND created_at < end
 ```
 
 Weeks run Sunday to Saturday, because Sunday starts Nepal's working week. Pass `weekStartsOn` (0 = Sunday to 6 = Saturday) for another start: `range("week", { weekStartsOn: 1 })` runs Monday to Sunday. `adRange` and `startOf`/`endOf` take the same option.
 
 The range is half-open: `start` is included and `end` is excluded, because `end` is the first moment of the next period. Always query with `>= start AND < end`. For any span of whole days, use `NepaliDate.rangeBetween(from, to)`, which includes both `from` and `to`.
+
+### Fiscal years
+
+Pass `"fiscalYear"` for Nepal's fiscal year, from Shrawan 1 to the last day of Asar. Any date in the fiscal year gives the same result:
+
+```ts
+const fy = new NepaliDate(2083, 4, 1); // fiscal year 2083/84
+
+fy.range("fiscalYear"); // { start: 2026-07-16T18:15:00.000Z, end: 2027-07-16T18:15:00.000Z }
+fy.adRange("fiscalYear"); // { start: "2026-07-17", end: "2027-07-17" }
+fy.startOf("fiscalYear"); // 2083-04-01
+fy.endOf("fiscalYear"); // 2084-03-32
+
+NepaliDate.today().range("fiscalYear"); // the current fiscal year
+```
+
+Fiscal years 1974/75 and 2086/87 run past the [supported range](#supported-range), so their ranges throw a `RangeError`.
 
 ### Why not `BETWEEN … 23:59:59`?
 

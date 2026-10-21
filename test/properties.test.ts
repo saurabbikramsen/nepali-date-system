@@ -143,10 +143,18 @@ describe("comparison", () => {
     );
   });
 
-  it("a date is in its own day, month and year, from startOf to endOf", () => {
-    const unit = fc.constantFrom<"day" | "month" | "year">("day", "month", "year");
+  it("a date is in its own day, month, year and fiscal year, from startOf to endOf", () => {
+    const unit = fc.constantFrom<"day" | "month" | "year" | "fiscalYear">(
+      "day",
+      "month",
+      "year",
+      "fiscalYear",
+    );
     fc.assert(
       fc.property(date, unit, (d, unit) => {
+        // Fiscal years 1974/75 and 2086/87 run past the ends of the table.
+        const { startYear, endYear } = d.fiscalYear();
+        fc.pre(unit !== "fiscalYear" || (startYear >= FIRST_YEAR && endYear <= LAST_YEAR));
         const start = d.startOf(unit);
         const end = d.endOf(unit);
         expect(d.isBetween(start, end)).toBe(true);
