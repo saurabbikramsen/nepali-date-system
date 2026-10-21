@@ -78,8 +78,20 @@ export interface InstantOptions {
   offsetMinutes?: number;
 }
 
-/** The calendar periods that NepaliDate#range covers. */
-export type RangeUnit = "day" | "month" | "year";
+/** The calendar periods that NepaliDate#range, startOf and endOf cover. */
+export type RangeUnit = "day" | "week" | "month" | "year";
+
+/** A weekday number: 0 is Sunday, 6 is Saturday. */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** Options for periods that can be a week. */
+export interface WeekOptions {
+  /**
+   * The day a week starts on, 0 (Sunday, the default and the start of Nepal's working week)
+   * to 6 (Saturday). Only used when the unit is "week".
+   */
+  weekStartsOn?: Weekday;
+}
 
 /**
  * How a range gives its bounds: a Date, an ISO 8601 string in UTC such as
@@ -95,7 +107,8 @@ export interface InstantFormatTypes {
 }
 
 /** Options for NepaliDate#range and NepaliDate.rangeBetween. */
-export interface RangeOptions<F extends InstantFormat = "date"> extends InstantOptions {
+export interface RangeOptions<F extends InstantFormat = "date">
+  extends InstantOptions, WeekOptions {
   /** The type of `start` and `end`: "date" (the default), "iso" or "ms". */
   as?: F;
 }
@@ -384,19 +397,21 @@ export class NepaliDate {
     return this.shiftMonths(years, 12, "years");
   }
   /**
-   * The first day of the month or year containing this date, as a new NepaliDate: Baisakh 1 for
-   * a year. "day" gives the same date. For the moment a period starts, use range or startInstant.
+   * The first day of the week, month or year containing this date, as a new NepaliDate: Sunday
+   * for a week unless `weekStartsOn` says otherwise, Baisakh 1 for a year. "day" gives the same
+   * date. For the moment a period starts, use range or startInstant.
    */
-  startOf(unit: RangeUnit): NepaliDate {
-    return NepaliDate.fromDays(this.periodDays(unit)[0]);
+  startOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
+    return NepaliDate.fromDays(this.periodDays(unit, options)[0]);
   }
   /**
-   * The last day of the month or year containing this date, as a new NepaliDate: day 29–32 of
-   * the month, or the last day of Chaitra. "day" gives the same date. This is a date, not a time;
-   * to query timestamps up to the end of a period, use range, whose end is the next period's start.
+   * The last day of the week, month or year containing this date, as a new NepaliDate: Saturday
+   * for a week starting on Sunday, day 29–32 of the month, or the last day of Chaitra. "day"
+   * gives the same date. This is a date, not a time; to query timestamps up to the end of a
+   * period, use range, whose end is the next period's start.
    */
-  endOf(unit: RangeUnit): NepaliDate {
-    return NepaliDate.fromDays(this.periodDays(unit)[1] - 1);
+  endOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
+    return NepaliDate.fromDays(this.periodDays(unit, options)[1] - 1);
   }
   private shiftDays(amount: number, daysPerUnit: number, unit: ArithmeticUnit): NepaliDate {
     checkWholeNumber(amount, unit);
@@ -434,33 +449,52 @@ export class NepaliDate {
     return new Date(daysToStartInstant(this.days, overrideOffsetMs(options)));
   }
   /**
-   * The span of time covered by the day, month or year containing this date in Nepal, for
+   * The span of time covered by the day, week, month or year containing this date in Nepal, for
    * querying timestamps: `WHERE created_at >= start AND created_at < end`. `end` is the start
    * of the next period, so nothing falls between two ranges. An end of 23:59:59 would miss
    * rows stamped 23:59:59.5. Pass `offsetMinutes` for a fixed UTC offset instead, and `as`
-   * to get the bounds as ISO strings or epoch ms.
+   * to get the bounds as ISO strings or epoch ms. Weeks start on Sunday unless `weekStartsOn`
+   * says otherwise.
    */
   range<F extends InstantFormat = "date">(
     unit: RangeUnit,
     options?: RangeOptions<F>,
   ): InstantRange<InstantFormatTypes[F]> {
-    const [first, next] = this.periodDays(unit);
+    const [first, next] = this.periodDays(unit, options);
     return dayRange(first, next, options);
   }
   /**
-   * The AD dates of the day, month or year containing this date, for DATE columns:
+   * The AD dates of the day, week, month or year containing this date, for DATE columns:
    * `WHERE sale_date >= start AND sale_date < end`. `end` is the AD date after the period's
-   * last day. No time zone is involved, so the server's zone can't shift the dates.
+   * last day. No time zone is involved, so the server's zone can't shift the dates. Weeks start
+   * on Sunday unless `weekStartsOn` says otherwise.
    */
-  adRange(unit: RangeUnit): AdDateRange {
-    const [first, next] = this.periodDays(unit);
+  adRange(unit: RangeUnit, options?: WeekOptions): AdDateRange {
+    const [first, next] = this.periodDays(unit, options);
     return { start: adDateString(first), end: adDateString(next) };
   }
   /** Day numbers of the first day of the period containing this date and of the day after it. */
-  private periodDays(unit: RangeUnit): [number, number] {
+  private periodDays(unit: RangeUnit, options?: WeekOptions): [number, number] {
+    const weekStartsOn = options?.weekStartsOn ?? 0;
+    if (!Number.isInteger(weekStartsOn) || weekStartsOn < 0 || weekStartsOn > 6) {
+      throw new RangeError(
+        `weekStartsOn must be 0 (Sunday) to 6 (Saturday), got ${String(weekStartsOn)}`,
+      );
+    }
     switch (unit) {
       case "day":
         return [this.days, this.days + 1];
+      case "week": {
+        const first = this.days - ((this.dayOfWeek - weekStartsOn + 7) % 7);
+        // The table starts and ends on a Saturday, so a few weeks at each end run past it.
+        if (first < 0 || first + 7 > TOTAL_DAYS) {
+          throw new RangeError(
+            `The week containing ${this} runs outside the supported range ` +
+              `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
+          );
+        }
+        return [first, first + 7];
+      }
       case "month": {
         const first = this.days - this.day + 1;
         return [first, first + this.daysInMonth];
@@ -468,7 +502,9 @@ export class NepaliDate {
       case "year":
         return [YEAR_START[this.year - FIRST_YEAR], YEAR_START[this.year - FIRST_YEAR + 1]];
       default:
-        throw new RangeError(`unit must be "day", "month" or "year", got ${JSON.stringify(unit)}`);
+        throw new RangeError(
+          `unit must be "day", "week", "month" or "year", got ${JSON.stringify(unit)}`,
+        );
     }
   }
   toAdString(): string {

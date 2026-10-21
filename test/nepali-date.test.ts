@@ -582,8 +582,8 @@ describe("range", () => {
   });
 
   it("rejects unknown units", () => {
-    expect(() => new NepaliDate(2083, 7, 1).range("week" as never)).toThrow(
-      /unit must be "day", "month" or "year", got "week"/,
+    expect(() => new NepaliDate(2083, 7, 1).range("quarter" as never)).toThrow(
+      /unit must be "day", "week", "month" or "year", got "quarter"/,
     );
   });
 });
@@ -737,7 +737,7 @@ describe("adRange", () => {
   });
 
   it("rejects unknown units", () => {
-    expect(() => new NepaliDate(2083, 7, 1).adRange("week" as never)).toThrow(RangeError);
+    expect(() => new NepaliDate(2083, 7, 1).adRange("quarter" as never)).toThrow(RangeError);
   });
 });
 

@@ -12,6 +12,8 @@ export type {
   InstantRange,
   RangeOptions,
   RangeUnit,
+  WeekOptions,
+  Weekday,
 } from "./nepali-date.js";
 export type { FormatOptions } from "./format.js";
 export type { Locale, LocaleName } from "./locales.js";

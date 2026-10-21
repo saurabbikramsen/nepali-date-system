@@ -268,9 +268,115 @@ describe("startOf and endOf", () => {
   });
 
   it("reject unknown units", () => {
-    expect(() => bs("2083-07-15").startOf("week" as never)).toThrow(
-      /unit must be "day", "month" or "year", got "week"/,
+    expect(() => bs("2083-07-15").startOf("quarter" as never)).toThrow(
+      /unit must be "day", "week", "month" or "year", got "quarter"/,
     );
     expect(() => bs("2083-07-15").endOf("quarter" as never)).toThrow(RangeError);
+  });
+});
+
+describe("weeks", () => {
+  // Kartik 1, 2083 is a Sunday, so Kartik 4 is a Wednesday.
+  const wednesday = bs("2083-07-04");
+
+  it("run Sunday to Saturday by default", () => {
+    expect(wednesday.startOf("week").toString()).toBe("2083-07-01");
+    expect(wednesday.endOf("week").toString()).toBe("2083-07-07");
+    expect(wednesday.startOf("week").dayOfWeek).toBe(0);
+    expect(wednesday.endOf("week").dayOfWeek).toBe(6);
+  });
+
+  it("start on the day given by weekStartsOn", () => {
+    expect(wednesday.startOf("week", { weekStartsOn: 1 }).toString()).toBe("2083-07-02");
+    expect(wednesday.endOf("week", { weekStartsOn: 1 }).toString()).toBe("2083-07-08");
+    expect(wednesday.startOf("week", { weekStartsOn: 6 }).toString()).toBe("2083-06-31");
+    expect(wednesday.endOf("week", { weekStartsOn: 6 }).toString()).toBe("2083-07-06");
+    expect(wednesday.startOf("week", { weekStartsOn: 3 })).toEqual(wednesday);
+  });
+
+  it("cross month and year ends", () => {
+    // A week starting on Wednesday that contains Kartik 1 begins in Aswin.
+    expect(bs("2083-07-01").startOf("week", { weekStartsOn: 3 }).toString()).toBe("2083-06-28");
+    const yearEnd = bs("2083-12-30");
+    const start = yearEnd.startOf("week");
+    const end = yearEnd.endOf("week");
+    expect(start.addDays(6)).toEqual(end);
+    if (yearEnd.dayOfWeek !== 6) expect(end.year).toBe(2084);
+  });
+
+  it("contain the date and run seven days, for every day in the table", () => {
+    for (let days = 7; days < TOTAL_DAYS - 7; days++) {
+      const date = NepaliDate.fromDays(days);
+      const start = date.startOf("week");
+      if (
+        start.dayOfWeek !== 0 ||
+        start.addDays(date.dayOfWeek).toString() !== date.toString() ||
+        date.endOf("week").toString() !== start.addDays(6).toString()
+      ) {
+        expect.fail(`${date}: week ${start} to ${date.endOf("week")}`);
+      }
+    }
+  });
+
+  it("start on the right weekday for every weekStartsOn", () => {
+    for (let days = 0; days < 7; days++) {
+      const date = wednesday.addDays(days);
+      for (let weekStartsOn = 0; weekStartsOn <= 6; weekStartsOn++) {
+        const options = { weekStartsOn: weekStartsOn as 0 | 1 | 2 | 3 | 4 | 5 | 6 };
+        const start = date.startOf("week", options);
+        const end = date.endOf("week", options);
+        expect(start.dayOfWeek, `${date} from ${weekStartsOn}`).toBe(weekStartsOn);
+        expect(end.dayOfWeek, `${date} from ${weekStartsOn}`).toBe((weekStartsOn + 6) % 7);
+        expect(start.addDays(6), `${date} from ${weekStartsOn}`).toEqual(end);
+      }
+    }
+  });
+
+  it("give week ranges for queries", () => {
+    expect(wednesday.range("week", { as: "iso" })).toEqual({
+      start: "2026-10-17T18:15:00.000Z",
+      end: "2026-10-24T18:15:00.000Z",
+    });
+    expect(wednesday.range("week", { weekStartsOn: 1, as: "iso", offsetMinutes: 0 })).toEqual({
+      start: "2026-10-19T00:00:00.000Z",
+      end: "2026-10-26T00:00:00.000Z",
+    });
+    expect(wednesday.adRange("week")).toEqual({ start: "2026-10-18", end: "2026-10-25" });
+    expect(wednesday.adRange("week", { weekStartsOn: 1 })).toEqual({
+      start: "2026-10-19",
+      end: "2026-10-26",
+    });
+  });
+
+  it("agree with range for every weekStartsOn", () => {
+    for (let weekStartsOn = 0; weekStartsOn <= 6; weekStartsOn++) {
+      const options = { weekStartsOn: weekStartsOn as 0 | 1 | 2 | 3 | 4 | 5 | 6 };
+      const { start, end } = wednesday.range("week", options);
+      expect(wednesday.startOf("week", options).startInstant()).toEqual(start);
+      expect(wednesday.endOf("week", options).addDays(1).startInstant()).toEqual(end);
+    }
+  });
+
+  it("reject weeks that run outside the table", () => {
+    // The table starts and ends on a Saturday.
+    expect(NepaliDate.MIN_DATE.dayOfWeek).toBe(6);
+    expect(NepaliDate.MAX_DATE.dayOfWeek).toBe(6);
+    expect(() => NepaliDate.MIN_DATE.startOf("week")).toThrow(
+      /week containing 1975-01-01 runs outside the supported range/,
+    );
+    expect(NepaliDate.MIN_DATE.startOf("week", { weekStartsOn: 6 })).toEqual(NepaliDate.MIN_DATE);
+    expect(NepaliDate.MAX_DATE.endOf("week")).toEqual(NepaliDate.MAX_DATE);
+    expect(() => NepaliDate.MAX_DATE.range("week", { weekStartsOn: 6 })).toThrow(RangeError);
+  });
+
+  it("reject weekStartsOn values that aren't 0–6", () => {
+    for (const weekStartsOn of [7, -1, 1.5, Number.NaN, "1"]) {
+      expect(
+        () => wednesday.startOf("week", { weekStartsOn: weekStartsOn as never }),
+        String(weekStartsOn),
+      ).toThrow(/weekStartsOn must be 0 \(Sunday\) to 6 \(Saturday\)/);
+    }
+    // Checked for every unit, so a typo is caught before the unit changes to "week".
+    expect(() => wednesday.startOf("month", { weekStartsOn: 7 as never })).toThrow(RangeError);
   });
 });
