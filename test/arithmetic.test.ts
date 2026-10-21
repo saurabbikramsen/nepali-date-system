@@ -195,3 +195,82 @@ describe("addYears", () => {
     expect(() => bs("2083-07-01").addYears(0.5)).toThrow(/years must be a whole number/);
   });
 });
+
+describe("startOf and endOf", () => {
+  it("give the first and last day of the month", () => {
+    const date = bs("2083-07-15"); // Kartik has 30 days in 2083
+    expect(date.startOf("month").toString()).toBe("2083-07-01");
+    expect(date.endOf("month").toString()).toBe("2083-07-30");
+  });
+
+  it("follow each month's own length", () => {
+    expect(bs("2083-03-10").endOf("month").toString()).toBe("2083-03-32"); // Asar: 32
+    expect(bs("2083-08-10").endOf("month").toString()).toBe("2083-08-29"); // Mangsir: 29
+    expect(bs("2056-05-01").endOf("month").toString()).toBe("2056-05-32"); // Bhadra 2056: 32
+  });
+
+  it("give Baisakh 1 and the last day of Chaitra for the year", () => {
+    const date = bs("2083-07-15");
+    expect(date.startOf("year").toString()).toBe("2083-01-01");
+    expect(date.endOf("year").toString()).toBe("2083-12-30");
+  });
+
+  it("give the same date for day", () => {
+    const date = bs("2083-07-15");
+    expect(date.startOf("day")).toEqual(date);
+    expect(date.endOf("day")).toEqual(date);
+  });
+
+  it("cover every month and year in the table back to back", () => {
+    for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
+      const yearStart = new NepaliDate(year, 1, 1);
+      expect(new NepaliDate(year, 6, 15).startOf("year"), String(year)).toEqual(yearStart);
+      for (let month = 1; month <= 12; month++) {
+        const length = NepaliDate.daysInMonth(year, month);
+        const date = new NepaliDate(year, month, Math.ceil(length / 2));
+        const start = date.startOf("month");
+        const end = date.endOf("month");
+        if (start.day !== 1 || end.day !== length || end.month !== month || end.year !== year) {
+          expect.fail(`${date}: startOf ${start}, endOf ${end}`);
+        }
+        if (year < LAST_YEAR || month < 12) {
+          expect(end.addDays(1).day, `${year}-${month}`).toBe(1);
+        }
+      }
+      if (year < LAST_YEAR) {
+        expect(yearStart.endOf("year").addDays(1), String(year)).toEqual(
+          new NepaliDate(year + 1, 1, 1),
+        );
+      }
+    }
+  });
+
+  it("agree with range", () => {
+    const date = bs("2083-07-15");
+    for (const unit of ["day", "month", "year"] as const) {
+      const { start, end } = date.range(unit);
+      expect(date.startOf(unit).startInstant(), unit).toEqual(start);
+      expect(date.endOf(unit).addDays(1).startInstant(), unit).toEqual(end);
+    }
+  });
+
+  it("work at both ends of the table", () => {
+    expect(NepaliDate.MAX_DATE.endOf("year")).toEqual(NepaliDate.MAX_DATE);
+    expect(NepaliDate.MAX_DATE.endOf("month")).toEqual(NepaliDate.MAX_DATE);
+    expect(NepaliDate.MIN_DATE.startOf("year")).toEqual(NepaliDate.MIN_DATE);
+  });
+
+  it("leave the original unchanged", () => {
+    const date = bs("2083-07-15");
+    date.startOf("year");
+    date.endOf("month");
+    expect(date.toString()).toBe("2083-07-15");
+  });
+
+  it("reject unknown units", () => {
+    expect(() => bs("2083-07-15").startOf("week" as never)).toThrow(
+      /unit must be "day", "month" or "year", got "week"/,
+    );
+    expect(() => bs("2083-07-15").endOf("quarter" as never)).toThrow(RangeError);
+  });
+});

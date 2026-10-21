@@ -383,6 +383,21 @@ export class NepaliDate {
   addYears(years: number): NepaliDate {
     return this.shiftMonths(years, 12, "years");
   }
+  /**
+   * The first day of the month or year containing this date, as a new NepaliDate: Baisakh 1 for
+   * a year. "day" gives the same date. For the moment a period starts, use range or startInstant.
+   */
+  startOf(unit: RangeUnit): NepaliDate {
+    return NepaliDate.fromDays(this.periodDays(unit)[0]);
+  }
+  /**
+   * The last day of the month or year containing this date, as a new NepaliDate: day 29–32 of
+   * the month, or the last day of Chaitra. "day" gives the same date. This is a date, not a time;
+   * to query timestamps up to the end of a period, use range, whose end is the next period's start.
+   */
+  endOf(unit: RangeUnit): NepaliDate {
+    return NepaliDate.fromDays(this.periodDays(unit)[1] - 1);
+  }
   private shiftDays(amount: number, daysPerUnit: number, unit: ArithmeticUnit): NepaliDate {
     checkWholeNumber(amount, unit);
     const days = this.days + amount * daysPerUnit;
