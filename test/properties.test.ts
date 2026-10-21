@@ -145,6 +145,23 @@ describe("differences", () => {
   });
 });
 
+describe("age", () => {
+  it("is years and months that addMonths can add without passing onDate, then the days left", () => {
+    fc.assert(
+      fc.property(date, date, (x, y) => {
+        const [birth, on] = x.isAfter(y) ? [y, x] : [x, y];
+        const { years, months, days } = NepaliDate.age(birth, on);
+        expect(months >= 0 && months <= 11).toBe(true);
+        expect(years * 12 + months).toBe(on.diffInMonths(birth));
+        expect(days).toBe(on.diffInDays(birth.addMonths(years * 12 + months)));
+        // The days left are fewer than a month, so the months are full.
+        expect(days >= 0 && days <= 31).toBe(true);
+      }),
+      options,
+    );
+  });
+});
+
 describe("comparison", () => {
   it("compare, isBefore, isAfter and isEqual agree with each other and with string order", () => {
     fc.assert(

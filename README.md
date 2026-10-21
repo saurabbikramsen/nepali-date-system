@@ -158,11 +158,20 @@ to.diffInDays(from); // 426
 to.diffInMonths(from); // 13: one more month would be 2084-03-15, after `to`
 to.diffInYears(from); // 1
 from.diffInMonths(to); // -13
-
-NepaliDate.today().diffInYears(birthDate); // age in years
 ```
 
 Months and years count only full units, the same way `addMonths` and `addYears` add them: `b.addMonths(a.diffInMonths(b))` is never after `a`. That includes [ending on a shorter month's last day](#adding-months-and-years), so `2056-06-30` is 1 month after `2056-05-32`. Swapping the dates only flips the sign.
+
+For someone's age in years, months and days, use `NepaliDate.age`. It's counted on today's date in Nepal unless you give another date:
+
+```ts
+const birthDate = NepaliDate.parse("2056-05-15");
+
+NepaliDate.age(birthDate, NepaliDate.parse("2083-06-26")); // { years: 27, months: 1, days: 11 }
+NepaliDate.age(birthDate); // on today's date in Nepal
+```
+
+The years and months are counted like `diffInYears` and `diffInMonths`, so a birthday on a day the month lacks comes on its last day: someone born on `2081-12-31` turns 1 on `2082-12-30`, the last day of Chaitra 2082. A birth date after the other date throws a `RangeError`.
 
 For reports, `NepaliDate.eachDay(from, to)` lists every date and `NepaliDate.eachMonth(from, to)` lists the first day of every month, both ends included:
 

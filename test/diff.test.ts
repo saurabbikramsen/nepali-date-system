@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
-import { NepaliDate } from "../src/nepali-date.js";
+import { type Age, NepaliDate } from "../src/nepali-date.js";
 
 const bs = (text: string) => NepaliDate.parse(text);
 
@@ -108,5 +108,78 @@ describe("differences", () => {
       /diffInMonths takes a NepaliDate/,
     );
     expect(() => date.diffInYears(undefined as never)).toThrow(TypeError);
+  });
+});
+
+describe("NepaliDate.age", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // toEqual on plain objects: years, then months, then days.
+  it.each([
+    ["2056-05-15", "2083-06-26", { years: 27, months: 1, days: 11 }],
+    ["2056-06-26", "2083-06-26", { years: 27, months: 0, days: 0 }], // a birthday
+    // The day before: 26 years and 11 months reach 2083-05-26, and Bhadra 2083 has 31 days.
+    ["2056-06-26", "2083-06-25", { years: 26, months: 11, days: 30 }],
+    ["2083-06-26", "2083-06-26", { years: 0, months: 0, days: 0 }], // born today
+    ["2083-06-26", "2083-06-27", { years: 0, months: 0, days: 1 }],
+  ])("is %s to %s: %o", (birth, on, age) => {
+    expect(NepaliDate.age(bs(birth), bs(on))).toEqual(age);
+  });
+
+  it.each([
+    // Chaitra 2082 has 30 days, so a Chaitra 31 birthday comes on Chaitra 30.
+    ["2081-12-31", "2082-12-29", { years: 0, months: 11, days: 29 }],
+    ["2081-12-31", "2082-12-30", { years: 1, months: 0, days: 0 }],
+    // Aswin 2056 has 30 days and Bhadra 2057 has 31, so a Bhadra 32 birth date counts from
+    // their last days.
+    ["2056-05-32", "2056-06-30", { years: 0, months: 1, days: 0 }],
+    ["2056-05-32", "2056-07-01", { years: 0, months: 1, days: 1 }],
+    ["2056-05-32", "2057-05-31", { years: 1, months: 0, days: 0 }],
+    // Jestha 2058 has 32 days, so this is exactly 21 months. Adding a year first would lose the
+    // 32nd in Bhadra 2057 and leave a day over.
+    ["2056-05-32", "2058-02-32", { years: 1, months: 9, days: 0 }],
+  ])("puts a birthday the month lacks on its last day: %s to %s", (birth, on, age) => {
+    expect(NepaliDate.age(bs(birth), bs(on))).toEqual(age);
+  });
+
+  it("agrees with diffInYears and diffInMonths, and adds back up to onDate", () => {
+    const birth = bs("2056-05-32");
+    for (let days = 0; days < 4 * 366; days++) {
+      const on = birth.addDays(days);
+      const { years, months, days: rest } = NepaliDate.age(birth, on);
+      const label = `${birth} to ${on}`;
+      expect(years, label).toBe(on.diffInYears(birth));
+      expect(years * 12 + months, label).toBe(on.diffInMonths(birth));
+      expect(birth.addMonths(years * 12 + months).addDays(rest), label).toEqual(on);
+    }
+  });
+
+  it("is on today's date in Nepal by default", () => {
+    vi.useFakeTimers();
+    // 2026-10-20T18:15Z is midnight in Kathmandu as 2083-07-04 begins.
+    vi.setSystemTime(new Date("2026-10-20T18:15:00Z"));
+    expect(NepaliDate.age(bs("2056-07-04"))).toEqual({ years: 27, months: 0, days: 0 });
+    vi.setSystemTime(new Date("2026-10-20T18:14:59Z"));
+    expect(NepaliDate.age(bs("2056-07-04"))).toEqual({ years: 26, months: 11, days: 30 });
+    expect(NepaliDate.age(bs("2056-07-04"), undefined)).toEqual(
+      NepaliDate.age(bs("2056-07-04"), NepaliDate.today()),
+    );
+  });
+
+  it("returns a plain object typed as Age", () => {
+    const age = NepaliDate.age(bs("2056-05-15"), bs("2083-06-26"));
+    expect(Object.keys(age)).toEqual(["years", "months", "days"]);
+    expectTypeOf(age).toEqualTypeOf<Age>();
+  });
+
+  it("rejects a birth date after onDate, and anything but a NepaliDate", () => {
+    expect(() => NepaliDate.age(bs("2083-06-27"), bs("2083-06-26"))).toThrow(
+      /age needs a birthDate on or before onDate, got 2083-06-27 and 2083-06-26/,
+    );
+    expect(() => NepaliDate.age("2056-05-15" as never)).toThrow(/age takes a NepaliDate/);
+    expect(() => NepaliDate.age(bs("2056-05-15"), "2083-06-26" as never)).toThrow(TypeError);
+    expect(() => NepaliDate.age(bs("2056-05-15"), null as never)).toThrow(TypeError);
   });
 });

@@ -312,6 +312,15 @@ function checkWholeNumber(amount: number, unit: ArithmeticUnit): void {
   }
 }
 
+/** An age, from NepaliDate.age: full years, then full months, then days. */
+export interface Age {
+  years: number;
+  /** Full months after the years, 0–11. */
+  months: number;
+  /** Days after the years and months, 0 to one less than the length of a month. */
+  days: number;
+}
+
 /**
  * The number of full months from `earlier` to `later`, which must not be before it: the most
  * that `earlier.addMonths` can add without passing `later`.
@@ -656,6 +665,29 @@ export class NepaliDate {
     if (this.days < other.days) return 0 - other.fullMonthSpans(this, months);
     // addMonths only moves forward as the months increase, so whole years are whole 12 months.
     return Math.floor(fullMonthsBetween(other, this) / months);
+  }
+  /**
+   * The age on `onDate` of someone born on `birthDate`: full years, then full months, then days,
+   * as `{ years: 27, months: 1, days: 11 }`. `onDate` defaults to today in Nepal. Years and months
+   * are counted as diffInYears and diffInMonths count them, so a birthday on a day the month
+   * lacks comes on its last day: someone born on 2081-12-31 is 1 on 2082-12-30, the last day of
+   * Chaitra 2082. Adding the years and months to `birthDate` in one addMonths call, then the
+   * days, gives `onDate`. Throws RangeError if `birthDate` is after `onDate`.
+   */
+  static age(birthDate: NepaliDate, onDate: NepaliDate = NepaliDate.today()): Age {
+    checkDate(birthDate, "age");
+    checkDate(onDate, "age");
+    if (onDate.days < birthDate.days) {
+      throw new RangeError(
+        `age needs a birthDate on or before onDate, got ${birthDate} and ${onDate}`,
+      );
+    }
+    const months = fullMonthsBetween(birthDate, onDate);
+    return {
+      years: Math.floor(months / 12),
+      months: months % 12,
+      days: onDate.days - birthDate.addMonths(months).days,
+    };
   }
 
   // ----------arithmetic----------
