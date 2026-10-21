@@ -143,19 +143,19 @@ describe("comparison", () => {
     );
   });
 
-  it("a date is in its own day, month, fiscal quarter, year and fiscal year, from startOf to endOf", () => {
-    const unit = fc.constantFrom<"day" | "month" | "fiscalQuarter" | "year" | "fiscalYear">(
-      "day",
-      "month",
-      "fiscalQuarter",
-      "year",
-      "fiscalYear",
-    );
+  it("a date is in its own period of every unit but week, from startOf to endOf", () => {
+    const unit = fc.constantFrom<
+      "day" | "month" | "fiscalQuarter" | "chaumasik" | "year" | "fiscalYear"
+    >("day", "month", "fiscalQuarter", "chaumasik", "year", "fiscalYear");
     fc.assert(
       fc.property(date, unit, (d, unit) => {
-        // Fiscal years 1974/75 and 2086/87 run past the ends of the table.
+        // Fiscal years 1974/75 and 2086/87 run past the ends of the table, and so do their
+        // third chaumasiks.
         const { startYear, endYear } = d.fiscalYear();
-        fc.pre(unit !== "fiscalYear" || (startYear >= FIRST_YEAR && endYear <= LAST_YEAR));
+        const pastTheEnds = startYear < FIRST_YEAR || endYear > LAST_YEAR;
+        fc.pre(
+          !pastTheEnds || (unit !== "fiscalYear" && !(unit === "chaumasik" && d.chaumasik() === 3)),
+        );
         const start = d.startOf(unit);
         const end = d.endOf(unit);
         expect(d.isBetween(start, end)).toBe(true);
@@ -165,6 +165,9 @@ describe("comparison", () => {
             d.fiscalQuarter(),
             d.fiscalQuarter(),
           ]);
+        }
+        if (unit === "chaumasik") {
+          expect([start.chaumasik(), end.chaumasik()]).toEqual([d.chaumasik(), d.chaumasik()]);
         }
         if (!start.isEqual(NepaliDate.MIN_DATE)) {
           expect(start.addDays(-1).isSame(d, unit)).toBe(false);

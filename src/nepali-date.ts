@@ -80,10 +80,14 @@ export interface InstantOptions {
 
 /**
  * The calendar periods that NepaliDate#range, startOf and endOf cover. A "year" runs from
- * Baisakh 1 and a "fiscalYear" from Shrawan 1, each to the day before the next one starts.
- * A "fiscalQuarter" is three months: Shrawan–Aswin, Kartik–Poush, Magh–Chaitra or Baisakh–Asar.
+ * Baisakh 1 and a "fiscalYear" from Shrawan 1 unless `fiscalYearStartMonth` says otherwise,
+ * each to the day before the next one starts. A "fiscalQuarter" is three months of the fiscal
+ * year and a "chaumasik" four: with the default Shrawan start, the quarters are Shrawan–Aswin,
+ * Kartik–Poush, Magh–Chaitra and Baisakh–Asar, and the chaumasiks are the government's
+ * reporting periods Shrawan–Kartik, Mangsir–Falgun and Chaitra–Asar.
  */
-export type RangeUnit = "day" | "week" | "month" | "fiscalQuarter" | "year" | "fiscalYear";
+export type RangeUnit =
+  "day" | "week" | "month" | "fiscalQuarter" | "chaumasik" | "year" | "fiscalYear";
 
 /** A weekday number: 0 is Sunday, 6 is Saturday. */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -96,6 +100,19 @@ export interface WeekOptions {
    */
   weekStartsOn?: Weekday;
 }
+
+/** Options for fiscal years and their quarters and chaumasiks. */
+export interface FiscalYearOptions {
+  /**
+   * The month the fiscal year starts in, 1 (Baisakh) to 12 (Chaitra). Defaults to 4, Shrawan,
+   * when the government's fiscal year starts. With 1, the fiscal year is the BS year. Only used
+   * for fiscal years, quarters and chaumasiks.
+   */
+  fiscalYearStartMonth?: number;
+}
+
+/** Options for the periods of a RangeUnit: weeks and fiscal years can start when you choose. */
+export interface PeriodOptions extends WeekOptions, FiscalYearOptions {}
 
 /**
  * How a range gives its bounds: a Date, an ISO 8601 string in UTC such as
@@ -112,7 +129,7 @@ export interface InstantFormatTypes {
 
 /** Options for NepaliDate#range and NepaliDate.rangeBetween. */
 export interface RangeOptions<F extends InstantFormat = "date">
-  extends InstantOptions, WeekOptions {
+  extends InstantOptions, PeriodOptions {
   /** The type of `start` and `end`: "date" (the default), "iso" or "ms". */
   as?: F;
 }
@@ -127,33 +144,71 @@ export interface InstantRange<T = Date> {
 }
 
 /**
- * A Nepal fiscal year, which runs from Shrawan 1 to the last day of Asar the next year:
- * `{ startYear: 2083, endYear: 2084, label: "2083/84" }`.
+ * A fiscal year. The government's runs from Shrawan 1 to the last day of Asar the next year:
+ * `{ startYear: 2083, endYear: 2084, label: "2083/84" }`. One that starts in Baisakh is the
+ * BS year: `{ startYear: 2083, endYear: 2083, label: "2083" }`.
  */
 export interface FiscalYear {
-  /** The BS year that holds Shrawan 1, the first day. */
+  /** The BS year that holds the first day. */
   startYear: number;
-  /** The BS year that holds the last day of Asar, always startYear + 1. */
+  /** The BS year that holds the last day: startYear + 1, or startYear if it starts in Baisakh. */
   endYear: number;
-  /** startYear and the last two digits of endYear, as written in Nepal: "2083/84". */
+  /**
+   * startYear and the last two digits of endYear, as written in Nepal: "2083/84". Just
+   * startYear, "2083", if both are the same year.
+   */
   label: string;
 }
 
-/** A fiscal quarter: 1 is Shrawan–Aswin, 2 Kartik–Poush, 3 Magh–Chaitra and 4 Baisakh–Asar. */
+/**
+ * A fiscal quarter. With the default Shrawan start, 1 is Shrawan–Aswin, 2 Kartik–Poush,
+ * 3 Magh–Chaitra and 4 Baisakh–Asar.
+ */
 export type FiscalQuarter = 1 | 2 | 3 | 4;
 
-/** Shrawan, the first month of the fiscal year. */
-const FISCAL_YEAR_FIRST_MONTH = 4;
+/**
+ * A chaumasik, a four-month third of the fiscal year. With the default Shrawan start these are
+ * the government's reporting periods: 1 is Shrawan–Kartik, 2 Mangsir–Falgun and 3 Chaitra–Asar.
+ */
+export type Chaumasik = 1 | 2 | 3;
+
+/** Shrawan, when the government's fiscal year starts: the default fiscalYearStartMonth. */
+const DEFAULT_FISCAL_YEAR_START_MONTH = 4;
+
+/** The fiscalYearStartMonth from FiscalYearOptions, after checking it. */
+function fiscalYearStartMonth(options: FiscalYearOptions | undefined): number {
+  const month = options?.fiscalYearStartMonth ?? DEFAULT_FISCAL_YEAR_START_MONTH;
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new RangeError(
+      `fiscalYearStartMonth must be 1 (Baisakh) to 12 (Chaitra), got ${String(month)}`,
+    );
+  }
+  return month;
+}
+
+/** Months since the fiscal year's first month, 0–11, of a BS month 1–12. */
+function fiscalMonthOf(month: number, startMonth: number): number {
+  return (month - startMonth + 12) % 12;
+}
 
 /**
- * The day number of Shrawan 1 in a BS year: -Infinity before the table and Infinity after it,
- * where the day isn't known. Either one makes periodDays throw, and isSame still works because
- * only one fiscal year starts before the table.
+ * The day number of day 1 of a month of the fiscal year that starts in month `startMonth` of
+ * `startYear`, counting the first month as 0, so 12 is the first month of the next fiscal year.
+ * -Infinity before the table and Infinity after it, where the day isn't known. Either one makes
+ * periodDays throw, and isSame still works because for each unit only one period starts before
+ * the table.
  */
-function fiscalYearStartDay(year: number): number {
+function fiscalMonthStartDay(startYear: number, startMonth: number, fiscalMonth: number): number {
+  // Count months from year 0, as addMonths does, so a year boundary is a multiple of 12.
+  const index = startYear * 12 + (startMonth - 1) + fiscalMonth;
+  const year = Math.floor(index / 12);
+  const month = (index % 12) + 1;
   if (year < FIRST_YEAR) return -Infinity;
+  // Baisakh 1 after the last year is known: it's the day after the table, where the last
+  // period ends if it doesn't cross into the next BS year.
+  if (year === LAST_YEAR + 1 && month === 1) return TOTAL_DAYS;
   if (year > LAST_YEAR) return Infinity;
-  return bsToDays(year, FISCAL_YEAR_FIRST_MONTH, 1);
+  return bsToDays(year, month, 1);
 }
 
 const MINUTE_MS = 60_000;
@@ -451,27 +506,42 @@ export class NepaliDate {
     return daysInYear(this.year);
   }
   /**
-   * The Nepal fiscal year this date falls in. It starts on Shrawan 1, so Baisakh to Asar belong
-   * to the fiscal year that began the year before: 2083-04-01 and 2084-03-32 are both in
-   * `{ startYear: 2083, endYear: 2084, label: "2083/84" }`. Returns a new object on every call.
-   * For its first and last days and its span of time, pass "fiscalYear" to startOf, endOf,
-   * range and adRange.
+   * The fiscal year this date falls in. The government's starts on Shrawan 1, so Baisakh to Asar
+   * belong to the fiscal year that began the year before: 2083-04-01 and 2084-03-32 are both in
+   * `{ startYear: 2083, endYear: 2084, label: "2083/84" }`. Pass `fiscalYearStartMonth` for a
+   * fiscal year that starts in another month: with 1, Baisakh, it's the BS year, labelled "2083".
+   * Returns a new object on every call. For its first and last days and its span of time, pass
+   * "fiscalYear" to startOf, endOf, range and adRange, with the same options.
    */
-  fiscalYear(): FiscalYear {
-    const startYear = this.month >= FISCAL_YEAR_FIRST_MONTH ? this.year : this.year - 1;
-    const endYear = startYear + 1;
-    return { startYear, endYear, label: `${startYear}/${pad2(endYear % 100)}` };
+  fiscalYear(options?: FiscalYearOptions): FiscalYear {
+    const startMonth = fiscalYearStartMonth(options);
+    const startYear = this.month >= startMonth ? this.year : this.year - 1;
+    const endYear = startMonth === 1 ? startYear : startYear + 1;
+    const label = endYear === startYear ? String(startYear) : `${startYear}/${pad2(endYear % 100)}`;
+    return { startYear, endYear, label };
   }
   /**
-   * The quarter of its fiscal year this date falls in: 1 for Shrawan–Aswin, 2 for Kartik–Poush,
-   * 3 for Magh–Chaitra and 4 for Baisakh–Asar. Quarter 4 belongs to the fiscal year that began
-   * the year before, as fiscalYear says. For its first and last days and its span of time, pass
-   * "fiscalQuarter" to startOf, endOf, range and adRange.
+   * The quarter of its fiscal year this date falls in, 1 to 4. With the government's fiscal year
+   * they're Shrawan–Aswin, Kartik–Poush, Magh–Chaitra and Baisakh–Asar, and quarter 4 belongs
+   * to the fiscal year that began the year before, as fiscalYear says. Pass
+   * `fiscalYearStartMonth` to count from another month. For its first and last days and its span
+   * of time, pass "fiscalQuarter" to startOf, endOf, range and adRange, with the same options.
    */
-  fiscalQuarter(): FiscalQuarter {
-    // Months since Shrawan, 0–11, three to a quarter.
-    const fiscalMonth = (this.month - FISCAL_YEAR_FIRST_MONTH + 12) % 12;
+  fiscalQuarter(options?: FiscalYearOptions): FiscalQuarter {
+    const fiscalMonth = fiscalMonthOf(this.month, fiscalYearStartMonth(options));
     return (Math.floor(fiscalMonth / 3) + 1) as FiscalQuarter;
+  }
+  /**
+   * The chaumasik, or four-month third of its fiscal year, this date falls in, 1 to 3. With the
+   * government's fiscal year they're its reporting periods Shrawan–Kartik, Mangsir–Falgun and
+   * Chaitra–Asar; chaumasik 3 runs from Chaitra into the next BS year and belongs to the fiscal
+   * year that began in the earlier one, as fiscalYear says. Pass `fiscalYearStartMonth` to count
+   * from another month. For its first and last days and its span of time, pass "chaumasik" to
+   * startOf, endOf, range and adRange, with the same options.
+   */
+  chaumasik(options?: FiscalYearOptions): Chaumasik {
+    const fiscalMonth = fiscalMonthOf(this.month, fiscalYearStartMonth(options));
+    return (Math.floor(fiscalMonth / 4) + 1) as Chaumasik;
   }
 
   // ----------comparison----------
@@ -572,8 +642,9 @@ export class NepaliDate {
   /**
    * The first day of the period of a RangeUnit containing this date, as a new NepaliDate:
    * Sunday for a week unless `weekStartsOn` says otherwise, day 1 of Shrawan, Kartik, Magh or
-   * Baisakh for a fiscal quarter, Baisakh 1 for a year, Shrawan 1 for a fiscal year. "day" gives
-   * the same date. For the moment a period starts, use range or startInstant.
+   * Baisakh for a fiscal quarter and of Shrawan, Mangsir or Chaitra for a chaumasik, Baisakh 1
+   * for a year, Shrawan 1 for a fiscal year. "day" gives the same date. For the moment a period
+   * starts, use range or startInstant.
    */
   startOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
     return NepaliDate.fromDays(this.periodDays(unit, options)[0]);
@@ -581,8 +652,8 @@ export class NepaliDate {
   /**
    * The last day of the period of a RangeUnit containing this date, as a new NepaliDate:
    * Saturday for a week starting on Sunday, day 29–32 of the month, the last day of Aswin,
-   * Poush, Chaitra or Asar for a fiscal quarter, of Chaitra for a year and of Asar for a fiscal
-   * year. "day" gives the same date. This is a date, not a time; to query timestamps up to the
+   * Poush, Chaitra or Asar for a fiscal quarter, of Kartik, Falgun or Asar for a chaumasik, of
+   * Chaitra for a year and of Asar for a fiscal year. "day" gives the same date. This is a date, not a time; to query timestamps up to the
    * end of a period, use range, whose end is the next period's start.
    */
   endOf(unit: RangeUnit, options?: WeekOptions): NepaliDate {
@@ -651,11 +722,18 @@ export class NepaliDate {
   /** Day numbers of the first day of the period containing this date and of the day after it. */
   private periodDays(unit: RangeUnit, options?: WeekOptions): [number, number] {
     const [first, next] = this.periodBounds(unit, options);
-    // Months, fiscal quarters and years always fit. A few weeks at each end run past the table,
-    // which starts and ends on a Saturday, and so do the fiscal years that began before it and
-    // end after it.
+    // Months and years always fit, and so do fiscal quarters, which are the BS year's own
+    // quarters and never cross from Chaitra into Baisakh. A few weeks at each end run past the
+    // table, which starts and ends on a Saturday. So do the fiscal year and the third chaumasik
+    // at each end, which start before the table or end after it.
     if (first < 0 || next > TOTAL_DAYS) {
-      const period = unit === "week" ? "week" : `fiscal year ${this.fiscalYear().label}`;
+      const { label } = this.fiscalYear();
+      const period =
+        unit === "week"
+          ? "week"
+          : unit === "chaumasik"
+            ? `${["first", "second", "third"][this.chaumasik() - 1]} chaumasik of fiscal year ${label}`
+            : `fiscal year ${label}`;
       throw new RangeError(
         `The ${period} containing ${this} runs outside the supported range ` +
           `${NepaliDate.MIN_DATE} to ${NepaliDate.MAX_DATE}`,
@@ -682,27 +760,28 @@ export class NepaliDate {
         const first = this.days - this.day + 1;
         return [first, first + this.daysInMonth];
       }
-      case "fiscalQuarter": {
-        // Fiscal quarters start in Baisakh, Shrawan, Kartik and Magh, the BS year's own quarters,
-        // so none crosses from Chaitra into Baisakh.
-        const firstMonth = this.month - ((this.month - 1) % 3);
-        const next =
-          firstMonth === 10
-            ? YEAR_START[this.year - FIRST_YEAR + 1]
-            : bsToDays(this.year, firstMonth + 3, 1);
-        return [bsToDays(this.year, firstMonth, 1), next];
-      }
+      case "fiscalQuarter":
+        return this.fiscalPeriodBounds(3);
+      case "chaumasik":
+        return this.fiscalPeriodBounds(4);
       case "year":
         return [YEAR_START[this.year - FIRST_YEAR], YEAR_START[this.year - FIRST_YEAR + 1]];
-      case "fiscalYear": {
-        const { startYear, endYear } = this.fiscalYear();
-        return [fiscalYearStartDay(startYear), fiscalYearStartDay(endYear)];
-      }
+      case "fiscalYear":
+        return this.fiscalPeriodBounds(12);
       default:
         throw new RangeError(
-          `unit must be "day", "week", "month", "fiscalQuarter", "year" or "fiscalYear", got ${JSON.stringify(unit)}`,
+          `unit must be "day", "week", "month", "fiscalQuarter", "chaumasik", "year" or "fiscalYear", got ${JSON.stringify(unit)}`,
         );
     }
+  }
+  /**
+   * Like periodBounds for the fiscal year split into parts `months` long: quarters for 3,
+   * chaumasiks for 4 and the whole fiscal year for 12.
+   */
+  private fiscalPeriodBounds(months: 3 | 4 | 12): [number, number] {
+    const first = Math.floor(fiscalMonthOf(this.month) / months) * months;
+    const { startYear } = this.fiscalYear();
+    return [fiscalMonthStartDay(startYear, first), fiscalMonthStartDay(startYear, first + months)];
   }
   toAdString(): string {
     const { year, month, day } = this.toAd();

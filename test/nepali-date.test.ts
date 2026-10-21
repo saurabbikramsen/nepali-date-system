@@ -3,6 +3,7 @@ import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
 import {
+  type Chaumasik,
   type FiscalQuarter,
   type FiscalYear,
   type InstantRange,
@@ -467,6 +468,111 @@ describe("fiscal quarters", () => {
   });
 });
 
+describe("chaumasik", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+  // The chaumasiks of fiscal year 2083/84: a date in each, its first and last days, the moments
+  // they start and the AD dates they cover. The third runs from Chaitra 2083 into Asar 2084.
+  const chaumasiks = [
+    {
+      chaumasik: 1,
+      date: "2083-06-26",
+      first: "2083-04-01",
+      last: "2083-07-30",
+      instants: ["2026-07-16T18:15:00.000Z", "2026-11-16T18:15:00.000Z"],
+      ad: { start: "2026-07-17", end: "2026-11-17" },
+    },
+    {
+      chaumasik: 2,
+      date: "2083-09-10",
+      first: "2083-08-01",
+      last: "2083-11-30",
+      instants: ["2026-11-16T18:15:00.000Z", "2027-03-14T18:15:00.000Z"],
+      ad: { start: "2026-11-17", end: "2027-03-15" },
+    },
+    {
+      chaumasik: 3,
+      date: "2084-02-01",
+      first: "2083-12-01",
+      last: "2084-03-32",
+      instants: ["2027-03-14T18:15:00.000Z", "2027-07-16T18:15:00.000Z"],
+      ad: { start: "2027-03-15", end: "2027-07-17" },
+    },
+  ];
+
+  it.each(chaumasiks)("gives chaumasik $chaumasik from $first to $last", (c) => {
+    for (const text of [c.first, c.date, c.last]) {
+      const date = NepaliDate.parse(text);
+      expect(date.chaumasik(), text).toBe(c.chaumasik);
+      expect(date.fiscalYear().label, text).toBe("2083/84");
+      expect(date.startOf("chaumasik").toString(), text).toBe(c.first);
+      expect(date.endOf("chaumasik").toString(), text).toBe(c.last);
+      expect(iso(date.range("chaumasik")), text).toEqual(c.instants);
+      expect(date.adRange("chaumasik"), text).toEqual(c.ad);
+    }
+  });
+
+  it("numbers the months from Shrawan, four to a chaumasik", () => {
+    const byMonth = Array.from({ length: 12 }, (_, i) => new NepaliDate(2083, i + 1, 1));
+    expect(byMonth.map((date) => date.chaumasik())).toEqual([3, 3, 3, 1, 1, 1, 1, 2, 2, 2, 2, 3]);
+    expectTypeOf(byMonth[0].chaumasik()).toEqualTypeOf<Chaumasik>();
+  });
+
+  it("covers every whole fiscal year in the table with three chaumasiks back to back", () => {
+    for (let year = FIRST_YEAR; year < LAST_YEAR; year++) {
+      const label = `${year}/${year + 1}`;
+      const starts = [
+        new NepaliDate(year, 4, 1),
+        new NepaliDate(year, 8, 1),
+        new NepaliDate(year, 12, 1),
+        new NepaliDate(year + 1, 4, 1),
+      ];
+      for (let i = 0; i < 3; i++) {
+        const first = starts[i];
+        const last = starts[i + 1].addDays(-1);
+        expect(first.endOf("chaumasik"), `${label} ${i + 1}`).toEqual(last);
+        expect(last.startOf("chaumasik"), `${label} ${i + 1}`).toEqual(first);
+        expect(first.range("chaumasik"), `${label} ${i + 1}`).toEqual(
+          NepaliDate.rangeBetween(first, last),
+        );
+        expect(last.adRange("chaumasik"), `${label} ${i + 1}`).toEqual(
+          NepaliDate.adRangeBetween(first, last),
+        );
+      }
+      expect(starts[0].startOf("fiscalYear"), label).toEqual(starts[0].startOf("chaumasik"));
+      expect(starts[2].endOf("fiscalYear"), label).toEqual(starts[2].endOf("chaumasik"));
+    }
+  });
+
+  it("rejects the third chaumasiks that run past either end of the table", () => {
+    expect(() => NepaliDate.MIN_DATE.range("chaumasik")).toThrow(
+      /third chaumasik of fiscal year 1974\/75 containing 1975-01-01 runs outside the supported range/,
+    );
+    expect(() => NepaliDate.MAX_DATE.adRange("chaumasik")).toThrow(
+      /third chaumasik of fiscal year 2086\/87 containing 2086-12-30 runs outside the supported range/,
+    );
+    expect(() => new NepaliDate(LAST_YEAR, 12, 1).startOf("chaumasik")).toThrow(RangeError);
+    // The chaumasiks just inside each end still work.
+    expect(new NepaliDate(FIRST_YEAR, 4, 1).startOf("chaumasik").toString()).toBe("1975-04-01");
+    const lastFalgun = new NepaliDate(LAST_YEAR, 11, NepaliDate.daysInMonth(LAST_YEAR, 11));
+    expect(new NepaliDate(LAST_YEAR, 8, 1).endOf("chaumasik")).toEqual(lastFalgun);
+  });
+
+  it("compares with isSame, even past the ends of the table", () => {
+    const bs = NepaliDate.parse;
+    expect(bs("2083-12-01").isSame(bs("2084-03-32"), "chaumasik")).toBe(true);
+    expect(bs("2083-11-30").isSame(bs("2083-12-01"), "chaumasik")).toBe(false);
+    expect(bs("2083-07-30").isSame(bs("2083-08-01"), "chaumasik")).toBe(false);
+    expect(bs("2084-03-32").isSame(bs("2084-04-01"), "chaumasik")).toBe(false);
+    expect(NepaliDate.MIN_DATE.isSame(new NepaliDate(FIRST_YEAR, 3, 1), "chaumasik")).toBe(true);
+    expect(NepaliDate.MIN_DATE.isSame(new NepaliDate(FIRST_YEAR, 4, 1), "chaumasik")).toBe(false);
+    expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 12, 1), "chaumasik")).toBe(true);
+    expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 11, 1), "chaumasik")).toBe(false);
+  });
+});
+
 describe("serialization", () => {
   it("writes YYYY-MM-DD with a zero-padded month and day", () => {
     expect(new NepaliDate(2083, 6, 26).toString()).toBe("2083-06-26");
@@ -862,7 +968,7 @@ describe("range", () => {
 
   it("rejects unknown units", () => {
     expect(() => new NepaliDate(2083, 7, 1).range("quarter" as never)).toThrow(
-      /unit must be "day", "week", "month", "fiscalQuarter", "year" or "fiscalYear", got "quarter"/,
+      /unit must be "day", "week", "month", "fiscalQuarter", "chaumasik", "year" or "fiscalYear", got "quarter"/,
     );
   });
 });

@@ -247,7 +247,14 @@ describe("startOf and endOf", () => {
 
   it("agree with range", () => {
     const date = bs("2083-07-15");
-    for (const unit of ["day", "month", "fiscalQuarter", "year", "fiscalYear"] as const) {
+    for (const unit of [
+      "day",
+      "month",
+      "fiscalQuarter",
+      "chaumasik",
+      "year",
+      "fiscalYear",
+    ] as const) {
       const { start, end } = date.range(unit);
       expect(date.startOf(unit).startInstant(), unit).toEqual(start);
       expect(date.endOf(unit).addDays(1).startInstant(), unit).toEqual(end);
@@ -269,7 +276,7 @@ describe("startOf and endOf", () => {
 
   it("reject unknown units", () => {
     expect(() => bs("2083-07-15").startOf("quarter" as never)).toThrow(
-      /unit must be "day", "week", "month", "fiscalQuarter", "year" or "fiscalYear", got "quarter"/,
+      /unit must be "day", "week", "month", "fiscalQuarter", "chaumasik", "year" or "fiscalYear", got "quarter"/,
     );
     expect(() => bs("2083-07-15").endOf("quarter" as never)).toThrow(RangeError);
   });
