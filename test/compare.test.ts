@@ -148,3 +148,91 @@ describe("isBetween", () => {
     expect(() => from.isBetween("2083-07-01" as never, to)).toThrow(TypeError);
   });
 });
+
+describe("NepaliDate.compare", () => {
+  const a = bs("2083-07-01");
+  const b = bs("2083-07-15");
+
+  it("returns -1, 0 or 1", () => {
+    expect(NepaliDate.compare(a, b)).toBe(-1);
+    expect(NepaliDate.compare(b, a)).toBe(1);
+    expect(NepaliDate.compare(a, bs("2083-07-01"))).toBe(0);
+  });
+
+  it("sorts dates oldest first when passed straight to sort", () => {
+    // Every day in 2083 and the first days of 2084, in a scrambled but fixed order.
+    const dates = Array.from({ length: 400 }, (_, i) => bs("2083-01-01").addDays((i * 157) % 400));
+    const sorted = [...dates].sort(NepaliDate.compare).map(String);
+    expect(sorted).toEqual(dates.map(String).sort());
+    expect(sorted[0]).toBe("2083-01-01");
+  });
+
+  it("sorts newest first with the arguments swapped", () => {
+    const dates = [a, bs("2084-01-01"), b, bs("2082-12-30")];
+    expect(dates.sort((x, y) => NepaliDate.compare(y, x)).map(String)).toEqual([
+      "2084-01-01",
+      "2083-07-15",
+      "2083-07-01",
+      "2082-12-30",
+    ]);
+  });
+
+  it("works without NepaliDate in front of it", () => {
+    const { compare } = NepaliDate;
+    expect([b, a].sort(compare)).toEqual([a, b]);
+  });
+
+  it("rejects anything but NepaliDate instances", () => {
+    expect(() => NepaliDate.compare(a, "2083-07-15" as never)).toThrow(
+      /compare takes a NepaliDate/,
+    );
+    expect(() => [a, "2083-07-15" as never].sort(NepaliDate.compare)).toThrow(TypeError);
+  });
+});
+
+describe("NepaliDate.min and NepaliDate.max", () => {
+  const a = bs("2083-07-01");
+  const b = bs("2083-07-15");
+  const c = bs("2082-12-30");
+
+  it("take dates passed separately", () => {
+    expect(NepaliDate.min(a, b, c)).toBe(c);
+    expect(NepaliDate.max(a, b, c)).toBe(b);
+  });
+
+  it("take one array", () => {
+    expect(NepaliDate.min([a, b, c])).toBe(c);
+    expect(NepaliDate.max([a, b, c])).toBe(b);
+  });
+
+  it("return the only date when given one", () => {
+    expect(NepaliDate.min(a)).toBe(a);
+    expect(NepaliDate.max([a])).toBe(a);
+  });
+
+  it("return the first of several equal dates", () => {
+    const sameDay = bs("2083-07-01");
+    expect(NepaliDate.min(a, sameDay)).toBe(a);
+    expect(NepaliDate.max(sameDay, a)).toBe(sameDay);
+  });
+
+  it("handle every day in the table as one array", () => {
+    // Too many to spread safely into arguments everywhere, so this needs the array form.
+    const all = Array.from({ length: TOTAL_DAYS }, (_, i) =>
+      NepaliDate.fromDays((i * 7919) % TOTAL_DAYS),
+    );
+    expect(NepaliDate.min(all)).toEqual(NepaliDate.MIN_DATE);
+    expect(NepaliDate.max(all)).toEqual(NepaliDate.MAX_DATE);
+  });
+
+  it("reject no dates", () => {
+    expect(() => NepaliDate.min()).toThrow(/min needs at least one date/);
+    expect(() => NepaliDate.max([])).toThrow(/max needs at least one date/);
+  });
+
+  it("reject anything but NepaliDate instances", () => {
+    expect(() => NepaliDate.min(a, "2083-07-15" as never)).toThrow(/min takes a NepaliDate/);
+    expect(() => NepaliDate.max([a, null as never])).toThrow(/max takes a NepaliDate/);
+    expect(() => NepaliDate.min([[a]] as never)).toThrow(TypeError);
+  });
+});

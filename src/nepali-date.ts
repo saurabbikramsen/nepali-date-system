@@ -191,6 +191,27 @@ function checkDate(value: NepaliDate, method: string): NepaliDate {
   return value;
 }
 
+/**
+ * The date that wins `beats` against all others, from dates passed separately or as one array.
+ * Earlier dates win ties, because `beats` must be strictly better.
+ */
+function pickDate(
+  args: readonly NepaliDate[] | readonly [readonly NepaliDate[]],
+  method: "min" | "max",
+  beats: (candidate: NepaliDate, best: NepaliDate) => boolean,
+): NepaliDate {
+  const dates: readonly NepaliDate[] =
+    args.length === 1 && Array.isArray(args[0]) ? args[0] : (args as readonly NepaliDate[]);
+  if (dates.length === 0) {
+    throw new RangeError(`${method} needs at least one date`);
+  }
+  let best = checkDate(dates[0], method);
+  for (let i = 1; i < dates.length; i++) {
+    if (beats(checkDate(dates[i], method), best)) best = dates[i];
+  }
+  return best;
+}
+
 function checkWholeNumber(amount: number, unit: ArithmeticUnit): void {
   if (!Number.isInteger(amount)) {
     throw new RangeError(`${unit} must be a whole number, got ${String(amount)}`);
@@ -372,6 +393,36 @@ export class NepaliDate {
   }
 
   // ----------comparison----------
+  /**
+   * -1 if `a` is earlier than `b`, 1 if it's later, 0 if they're the same date. Sorts dates
+   * oldest first when passed to sort: `dates.sort(NepaliDate.compare)`. For newest first, use
+   * `dates.sort((a, b) => NepaliDate.compare(b, a))`.
+   */
+  static compare(a: NepaliDate, b: NepaliDate): -1 | 0 | 1 {
+    const difference = checkDate(a, "compare").days - checkDate(b, "compare").days;
+    return difference < 0 ? -1 : difference > 0 ? 1 : 0;
+  }
+  /**
+   * The earliest of the given dates, passed separately or as one array: `NepaliDate.min(a, b)`
+   * or `NepaliDate.min(dates)`. Use the array form for long lists, which can be too long to
+   * spread into arguments. Returns one of the given dates, the first if several are equal.
+   * Throws RangeError if there are none.
+   */
+  static min(dates: readonly NepaliDate[]): NepaliDate;
+  static min(...dates: NepaliDate[]): NepaliDate;
+  static min(...args: NepaliDate[] | [readonly NepaliDate[]]): NepaliDate {
+    return pickDate(args, "min", (candidate, best) => candidate.days < best.days);
+  }
+  /**
+   * The latest of the given dates, passed separately or as one array, like NepaliDate.min.
+   * Returns one of the given dates, the first if several are equal. Throws RangeError if there
+   * are none.
+   */
+  static max(dates: readonly NepaliDate[]): NepaliDate;
+  static max(...dates: NepaliDate[]): NepaliDate;
+  static max(...args: NepaliDate[] | [readonly NepaliDate[]]): NepaliDate {
+    return pickDate(args, "max", (candidate, best) => candidate.days > best.days);
+  }
   /** Whether this date is earlier than `other`. */
   isBefore(other: NepaliDate): boolean {
     return this.days < checkDate(other, "isBefore").days;
