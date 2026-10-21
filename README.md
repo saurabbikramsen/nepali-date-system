@@ -4,6 +4,25 @@ Bikram Sambat (BS, the Nepali calendar) dates for JavaScript and TypeScript. Con
 
 It also gives you today's date in Nepal on a server in any time zone, and the exact start and end of Nepali days, months and years for database queries. It adds and compares dates, and formats and parses them in English or Nepali, with 0–9 or Devanagari digits. Fiscal-year helpers are planned for a later release.
 
+## Why this library
+
+- **The right date on any server.** `NepaliDate.today()` and `NepaliDate.fromInstant()` give the date in Kathmandu whether your server runs in UTC, the US or Nepal. Libraries that read the server's local time are wrong for part of every day on servers outside Nepal: on a UTC server, from 18:15 to midnight.
+- **Ready for database queries.** `range()` gives the exact start and end of any Nepali day, week, month or year, so `>= start AND < end` never drops or double-counts a row.
+- **Checked month data.** Month lengths for BS 1975–2086 are cross-checked across open-source tables and published panchangs, and the years where tables disagree are settled from documents written at the time. The tests check 116 dated historical events and every day in the table.
+- **Safe to pass around.** Dates are immutable, every method returns a new one, and there are no runtime dependencies.
+
+How it compares with [nepali-date-converter](https://www.npmjs.com/package/nepali-date-converter) 3.4.0, a widely used alternative:
+
+|                                              | nepali-date-system | nepali-date-converter 3.4.0                |
+| -------------------------------------------- | ------------------ | ------------------------------------------ |
+| BS years                                     | 1975–2086          | 2000–2090                                  |
+| Date in Nepal on a UTC or US server          | Yes                | No: uses the server's local time           |
+| Day, week, month and year ranges for queries | Yes                | No                                         |
+| Add days, weeks, months and years            | Yes, with clamping | No                                         |
+| Dates can't be changed by accident           | Yes, immutable     | No: `setDate`, `setMonth` and `setYear` do |
+| Nepali names and Devanagari digits           | Yes                | Yes                                        |
+| TypeScript types                             | Yes                | Yes                                        |
+
 ## Install
 
 ```sh
