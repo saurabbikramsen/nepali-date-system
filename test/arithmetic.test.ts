@@ -348,6 +348,28 @@ describe("weeks", () => {
     });
   });
 
+  it("give back-to-back week ranges across the whole table, with no gaps or overlaps", () => {
+    for (const weekStartsOn of [0, 1, 6] as const) {
+      // Day number of the first week that starts on weekStartsOn and fits in the table.
+      const first = (weekStartsOn - NepaliDate.MIN_DATE.dayOfWeek + 7) % 7;
+      let previous: { start: number; end: number } | undefined;
+      let previousAd: { start: string; end: string } | undefined;
+      for (let start = first; start + 7 <= TOTAL_DAYS; start += 7) {
+        const date = NepaliDate.fromDays(start + 3); // mid-week
+        const range = date.range("week", { weekStartsOn, as: "ms" });
+        const adRange = date.adRange("week", { weekStartsOn });
+        if (
+          date.startOf("week", { weekStartsOn }).dayOfWeek !== weekStartsOn ||
+          (previous && range.start !== previous.end) ||
+          (previousAd && adRange.start !== previousAd.end)
+        ) {
+          expect.fail(`week of ${date} (from ${weekStartsOn}) doesn't follow the one before`);
+        }
+        [previous, previousAd] = [range, adRange];
+      }
+    }
+  });
+
   it("agree with range for every weekStartsOn", () => {
     for (let weekStartsOn = 0; weekStartsOn <= 6; weekStartsOn++) {
       const options = { weekStartsOn: weekStartsOn as 0 | 1 | 2 | 3 | 4 | 5 | 6 };
