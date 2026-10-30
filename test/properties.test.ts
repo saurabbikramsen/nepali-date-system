@@ -2,12 +2,12 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
-import { NepaliDate } from "../src/nepali-date.js";
+import { fromDays, NepaliDate } from "../src/nepali-date.js";
 
 /** A day number anywhere in the table. */
 const dayNumber = fc.integer({ min: 0, max: TOTAL_DAYS - 1 });
 /** A date anywhere in the table. */
-const date = dayNumber.map((days) => NepaliDate.fromDays(days));
+const date = dayNumber.map((days) => fromDays(days));
 /** A month anywhere in the table, counted from year 0 as year × 12 + (month − 1). */
 const monthIndex = fc.integer({ min: FIRST_YEAR * 12, max: LAST_YEAR * 12 + 11 });
 
@@ -19,7 +19,7 @@ describe("addDays and addWeeks", () => {
     // The start and the target are both in the table, so n never runs off the end.
     fc.assert(
       fc.property(dayNumber, dayNumber, (start, target) => {
-        const from = NepaliDate.fromDays(start);
+        const from = fromDays(start);
         const n = target - start;
         expect(from.addDays(n).addDays(-n)).toEqual(from);
       }),
@@ -30,7 +30,7 @@ describe("addDays and addWeeks", () => {
   it("adding a then b is the same as adding a + b", () => {
     fc.assert(
       fc.property(dayNumber, dayNumber, dayNumber, (start, middle, end) => {
-        const from = NepaliDate.fromDays(start);
+        const from = fromDays(start);
         const a = middle - start;
         const b = end - middle;
         expect(from.addDays(a).addDays(b)).toEqual(from.addDays(a + b));
@@ -42,7 +42,7 @@ describe("addDays and addWeeks", () => {
   it("moves the weekday by n mod 7", () => {
     fc.assert(
       fc.property(dayNumber, dayNumber, (start, target) => {
-        const from = NepaliDate.fromDays(start);
+        const from = fromDays(start);
         const n = target - start;
         expect(from.addDays(n).dayOfWeek).toBe((((from.dayOfWeek + n) % 7) + 7) % 7);
       }),
@@ -53,7 +53,7 @@ describe("addDays and addWeeks", () => {
   it("addWeeks(n) is addDays(7n)", () => {
     fc.assert(
       fc.property(dayNumber, dayNumber, (start, target) => {
-        const from = NepaliDate.fromDays(start);
+        const from = fromDays(start);
         // Whole weeks from start towards target, so the result stays in the table.
         const weeks = Math.trunc((target - start) / 7);
         expect(from.addWeeks(weeks)).toEqual(from.addDays(7 * weeks));

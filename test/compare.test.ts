@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
-import { NepaliDate } from "../src/nepali-date.js";
+import { fromDays, NepaliDate } from "../src/nepali-date.js";
 
 const bs = (text: string) => NepaliDate.parse(text);
 
@@ -27,7 +27,7 @@ describe("isBefore, isAfter and isEqual", () => {
   it("agree with the order of YYYY-MM-DD strings across the table", () => {
     // Day numbers spread over the whole table, compared in every pair.
     const dates = Array.from({ length: 60 }, (_, i) =>
-      NepaliDate.fromDays(Math.floor((i * (TOTAL_DAYS - 1)) / 59)),
+      fromDays(Math.floor((i * (TOTAL_DAYS - 1)) / 59)),
     ).concat(bs("2083-12-30"), bs("2084-01-01"), bs("2083-03-32"), bs("2083-04-01"));
     for (const x of dates) {
       for (const y of dates) {
@@ -226,9 +226,7 @@ describe("NepaliDate.min and NepaliDate.max", () => {
 
   it("handle every day in the table as one array", () => {
     // Too many to spread safely into arguments everywhere, so this needs the array form.
-    const all = Array.from({ length: TOTAL_DAYS }, (_, i) =>
-      NepaliDate.fromDays((i * 7919) % TOTAL_DAYS),
-    );
+    const all = Array.from({ length: TOTAL_DAYS }, (_, i) => fromDays((i * 7919) % TOTAL_DAYS));
     expect(NepaliDate.min(all)).toEqual(NepaliDate.MIN_DATE);
     expect(NepaliDate.max(all)).toEqual(NepaliDate.MAX_DATE);
   });

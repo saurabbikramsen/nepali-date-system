@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
-import { type Age, NepaliDate } from "../src/nepali-date.js";
+import { type Age, fromDays, NepaliDate } from "../src/nepali-date.js";
 
 const bs = (text: string) => NepaliDate.parse(text);
 
@@ -25,7 +25,7 @@ describe("diffInDays", () => {
     const first = NepaliDate.MIN_DATE;
     const firstMs = Date.parse(first.toAdString());
     for (let days = 0; days < TOTAL_DAYS; days += 7) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       const adDays = (Date.parse(date.toAdString()) - firstMs) / 86_400_000;
       if (date.diffInDays(first) !== adDays) {
         expect.fail(`${date} is ${date.diffInDays(first)} days after ${first}, not ${adDays}`);

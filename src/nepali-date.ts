@@ -352,11 +352,6 @@ export class NepaliDate {
   }
 
   // -------------factories---------------
-  static fromDays(days: number): NepaliDate {
-    const { year, month, day } = daysToBs(days);
-    return new NepaliDate(year, month, day);
-  }
-
   /**
    * Converts an AD date to BS. Takes numbers, or a year-first string such as
    * "2026-10-12", "2026/10/12", "2026.10.12" or "2026 10 12", in 0–9 or Devanagari digits
@@ -366,9 +361,9 @@ export class NepaliDate {
   static fromAd(year: number, month: number, day: number): NepaliDate;
   static fromAd(yearOrText: number | string, month?: number, day?: number): NepaliDate {
     if (typeof yearOrText === "string") {
-      return NepaliDate.fromDays(adToDays(...parseYearFirst(yearOrText, "AD")));
+      return fromDays(adToDays(...parseYearFirst(yearOrText, "AD")));
     }
-    return NepaliDate.fromDays(adToDays(yearOrText, month as number, day as number));
+    return fromDays(adToDays(yearOrText, month as number, day as number));
   }
 
   /**
@@ -388,7 +383,7 @@ export class NepaliDate {
           `${NepaliDate.MIN_DATE.toAdString()} to ${NepaliDate.MAX_DATE.toAdString()}`,
       );
     }
-    return NepaliDate.fromDays(days);
+    return fromDays(days);
   }
 
   /**
@@ -431,7 +426,7 @@ export class NepaliDate {
    */
   static eachDay(from: NepaliDate, to: NepaliDate): NepaliDate[] {
     const [first, next] = NepaliDate.spanDays(from, to, "eachDay");
-    return Array.from({ length: next - first }, (_, i) => NepaliDate.fromDays(first + i));
+    return Array.from({ length: next - first }, (_, i) => fromDays(first + i));
   }
 
   /**
@@ -500,9 +495,9 @@ export class NepaliDate {
 
   // ----------calendar info----------
   /** The first supported date (Baisakh 1, FIRST_YEAR). */
-  static readonly MIN_DATE: NepaliDate = NepaliDate.fromDays(0);
+  static readonly MIN_DATE: NepaliDate = new NepaliDate(FIRST_YEAR, 1, 1);
   /** The last supported date (the last day of Chaitra, LAST_YEAR). */
-  static readonly MAX_DATE: NepaliDate = NepaliDate.fromDays(TOTAL_DAYS - 1);
+  static readonly MAX_DATE: NepaliDate = new NepaliDate(LAST_YEAR, 12, daysInMonth(LAST_YEAR, 12));
 
   /** Days in a BS month (29–32). Throws RangeError for an unsupported year or invalid month. */
   static daysInMonth(year: number, month: number): number {
@@ -521,8 +516,8 @@ export class NepaliDate {
 
   // ----------getters----------
 
-  get dayOfWeek(): number {
-    return (this.days + EPOCH_WEEKDAY) % 7;
+  get dayOfWeek(): Weekday {
+    return ((this.days + EPOCH_WEEKDAY) % 7) as Weekday;
   }
   get dayOfYear(): number {
     return this.days - YEAR_START[this.year - FIRST_YEAR] + 1;
@@ -734,7 +729,7 @@ export class NepaliDate {
    * moment a period starts, use range or startInstant.
    */
   startOf(unit: RangeUnit, options?: PeriodOptions): NepaliDate {
-    return NepaliDate.fromDays(this.periodDays(unit, options)[0]);
+    return fromDays(this.periodDays(unit, options)[0]);
   }
   /**
    * The last day of the period of a RangeUnit containing this date, as a new NepaliDate:
@@ -745,13 +740,13 @@ export class NepaliDate {
    * start.
    */
   endOf(unit: RangeUnit, options?: PeriodOptions): NepaliDate {
-    return NepaliDate.fromDays(this.periodDays(unit, options)[1] - 1);
+    return fromDays(this.periodDays(unit, options)[1] - 1);
   }
   private shiftDays(amount: number, daysPerUnit: number, unit: ArithmeticUnit): NepaliDate {
     checkWholeNumber(amount, unit);
     const days = this.days + amount * daysPerUnit;
     if (days < 0 || days >= TOTAL_DAYS) throw this.outOfRange(amount, unit);
-    return NepaliDate.fromDays(days);
+    return fromDays(days);
   }
   private shiftMonths(amount: number, monthsPerUnit: number, unit: ArithmeticUnit): NepaliDate {
     checkWholeNumber(amount, unit);
@@ -920,4 +915,13 @@ export class NepaliDate {
   toJSON(): string {
     return this.toString();
   }
+}
+
+/**
+ * The date with a day number counted from Baisakh 1 of FIRST_YEAR. Internal: day numbers move
+ * if the table ever starts earlier, so this isn't exported from the package.
+ */
+export function fromDays(days: number): NepaliDate {
+  const { year, month, day } = daysToBs(days);
+  return new NepaliDate(year, month, day);
 }

@@ -7,6 +7,7 @@ import {
   type FiscalQuarter,
   type FiscalYear,
   type FiscalYearOptions,
+  fromDays,
   type InstantRange,
   NepaliDate,
   type PeriodOptions,
@@ -82,7 +83,7 @@ describe("NepaliDate.fromAd with a string", () => {
 
   it("matches the numeric form for every day in the table", () => {
     for (let days = 0; days < TOTAL_DAYS; days++) {
-      const bs = NepaliDate.fromDays(days);
+      const bs = fromDays(days);
       const adText = bs.toAdString();
       if (NepaliDate.fromAd(adText).toString() !== bs.toString()) {
         expect.fail(`fromAd(${JSON.stringify(adText)}) did not return ${bs.toString()}`);
@@ -229,7 +230,7 @@ describe("fiscalYear", () => {
   it("changes on Shrawan 1 and on no other day in the table", () => {
     let previous = NepaliDate.MIN_DATE.fiscalYear();
     for (let days = 1; days < TOTAL_DAYS; days++) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       const current = date.fiscalYear();
       const isShrawan1 = date.month === 4 && date.day === 1;
       if ((current.startYear !== previous.startYear) !== isShrawan1) {
@@ -747,7 +748,7 @@ describe("NepaliDate.parse", () => {
 
   it("round-trips every day in the table", () => {
     for (let days = 0; days < TOTAL_DAYS; days++) {
-      const text = NepaliDate.fromDays(days).toString();
+      const text = fromDays(days).toString();
       if (NepaliDate.parse(text).toString() !== text) {
         expect.fail(`parse(${JSON.stringify(text)}) did not return the same date`);
       }
@@ -998,7 +999,7 @@ describe("startInstant", () => {
 
   it("is the first moment of the date for every day in the table", () => {
     for (let days = 0; days < TOTAL_DAYS; days++) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       const start = date.startInstant().getTime();
       const sameDay = NepaliDate.fromInstant(start).toString() === date.toString();
       const dayBefore =

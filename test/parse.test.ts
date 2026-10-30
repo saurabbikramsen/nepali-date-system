@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TOTAL_DAYS, YEAR_START } from "../src/core/days.js";
 import { FIRST_YEAR } from "../src/defined.js";
-import { NepaliDate } from "../src/nepali-date.js";
+import { fromDays, NepaliDate } from "../src/nepali-date.js";
 
 const parsed = (...args: Parameters<typeof NepaliDate.parse>) =>
   NepaliDate.parse(...args).toString();
@@ -162,7 +162,7 @@ describe("format then parse", () => {
   it("reads back what it writes for every day of 2083, in both locales and digit sets", () => {
     const first = YEAR_START[2083 - FIRST_YEAR];
     for (let days = first; days < YEAR_START[2083 - FIRST_YEAR + 1]; days++) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       for (const pattern of patterns) {
         for (const locale of ["en", "ne"] as const) {
           for (const digits of ["latin", "devanagari"] as const) {
@@ -188,7 +188,7 @@ describe("format then parse", () => {
     ["ne", "devanagari"],
   ] as const)("reads back every day in the table, in %s with %s digits", (locale, digits) => {
     for (let days = 0; days < TOTAL_DAYS; days++) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       const text = date.format(everyToken, { locale, digits });
       const back = NepaliDate.parse(text, everyToken).toString();
       if (back !== date.toString()) {

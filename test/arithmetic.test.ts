@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
-import { NepaliDate } from "../src/nepali-date.js";
+import { fromDays, NepaliDate } from "../src/nepali-date.js";
 
 const bs = (text: string) => NepaliDate.parse(text);
 
@@ -40,7 +40,7 @@ describe("addDays", () => {
 
   it("matches AD date arithmetic for every day in the table", () => {
     for (let days = 0; days < TOTAL_DAYS - 1; days++) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       const next = date.addDays(1);
       if (
         next.toAdString() !== adPlus(date.toAdString(), 1) ||
@@ -313,7 +313,7 @@ describe("weeks", () => {
 
   it("contain the date and run seven days, for every day in the table", () => {
     for (let days = 7; days < TOTAL_DAYS - 7; days++) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       const start = date.startOf("week");
       if (
         start.dayOfWeek !== 0 ||
@@ -362,7 +362,7 @@ describe("weeks", () => {
       let previous: { start: number; end: number } | undefined;
       let previousAd: { start: string; end: string } | undefined;
       for (let start = first; start + 7 <= TOTAL_DAYS; start += 7) {
-        const date = NepaliDate.fromDays(start + 3); // mid-week
+        const date = fromDays(start + 3); // mid-week
         const range = date.range("week", { weekStartsOn, as: "ms" });
         const adRange = date.adRange("week", { weekStartsOn });
         if (
