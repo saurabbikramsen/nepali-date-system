@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { MONTH_NAMES } from "../src/defined.js";
-import { NepaliDate } from "../src/nepali-date.js";
+import { fromDays, NepaliDate } from "../src/nepali-date.js";
 
 // Kartik 1, 2083 is Sunday 18 October 2026.
 const kartik1 = new NepaliDate(2083, 7, 1);
@@ -60,7 +60,7 @@ describe("format patterns", () => {
 
   it("matches toString with YYYY-MM-DD for every day in the table", () => {
     for (let days = 0; days < TOTAL_DAYS; days++) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       if (date.format("YYYY-MM-DD") !== date.toString()) {
         expect.fail(`${date.toString()} formatted as ${date.format("YYYY-MM-DD")}`);
       }
@@ -178,7 +178,7 @@ describe("format digits", () => {
 
   it("parses back what it formats, for every day in the table", () => {
     for (let days = 0; days < TOTAL_DAYS; days++) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       const text = date.format("YYYY-MM-DD", devanagari);
       if (NepaliDate.parse(text).toString() !== date.toString()) {
         expect.fail(`${date.toString()} → ${text} → ${NepaliDate.parse(text).toString()}`);

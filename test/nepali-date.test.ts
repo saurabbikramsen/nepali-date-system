@@ -2,7 +2,17 @@ import { inspect } from "node:util";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { TOTAL_DAYS } from "../src/core/days.js";
 import { FIRST_YEAR, LAST_YEAR } from "../src/defined.js";
-import { type InstantRange, NepaliDate } from "../src/nepali-date.js";
+import {
+  type Chaumasik,
+  type FiscalQuarter,
+  type FiscalYear,
+  type FiscalYearOptions,
+  fromDays,
+  type InstantRange,
+  NepaliDate,
+  type PeriodOptions,
+  type RangeOptions,
+} from "../src/nepali-date.js";
 
 describe("NepaliDate construction", () => {
   it("accepts valid dates", () => {
@@ -73,7 +83,7 @@ describe("NepaliDate.fromAd with a string", () => {
 
   it("matches the numeric form for every day in the table", () => {
     for (let days = 0; days < TOTAL_DAYS; days++) {
-      const bs = NepaliDate.fromDays(days);
+      const bs = fromDays(days);
       const adText = bs.toAdString();
       if (NepaliDate.fromAd(adText).toString() !== bs.toString()) {
         expect.fail(`fromAd(${JSON.stringify(adText)}) did not return ${bs.toString()}`);
@@ -188,6 +198,520 @@ describe("calendar info", () => {
   });
 });
 
+describe("fiscalYear", () => {
+  const fy2083 = { startYear: 2083, endYear: 2084, label: "2083/84" };
+
+  it.each([
+    ["2083-04-01", fy2083], // Shrawan 1, the first day
+    ["2083-06-26", fy2083],
+    ["2083-12-30", fy2083], // Chaitra, the end of the BS year
+    ["2084-01-01", fy2083], // Baisakh 1 stays in the fiscal year that began in 2083
+    [`2084-03-${NepaliDate.daysInMonth(2084, 3)}`, fy2083], // the last day of Asar
+    ["2083-03-32", { startYear: 2082, endYear: 2083, label: "2082/83" }],
+    ["2083-01-01", { startYear: 2082, endYear: 2083, label: "2082/83" }],
+  ])("puts %s in the right fiscal year", (text, expected) => {
+    expect(NepaliDate.parse(text).fiscalYear()).toEqual(expected);
+  });
+
+  it("pads the end year's last two digits across a century", () => {
+    expect(new NepaliDate(2000, 1, 1).fiscalYear().label).toBe("1999/00");
+    expect(new NepaliDate(2000, 4, 1).fiscalYear().label).toBe("2000/01");
+    expect(new NepaliDate(2009, 4, 1).fiscalYear().label).toBe("2009/10");
+  });
+
+  it("gives the fiscal year before the table for its first Baisakh to Asar", () => {
+    expect(NepaliDate.MIN_DATE.fiscalYear()).toEqual({
+      startYear: FIRST_YEAR - 1,
+      endYear: FIRST_YEAR,
+      label: `${FIRST_YEAR - 1}/${String(FIRST_YEAR % 100).padStart(2, "0")}`,
+    });
+  });
+
+  it("changes on Shrawan 1 and on no other day in the table", () => {
+    let previous = NepaliDate.MIN_DATE.fiscalYear();
+    for (let days = 1; days < TOTAL_DAYS; days++) {
+      const date = fromDays(days);
+      const current = date.fiscalYear();
+      const isShrawan1 = date.month === 4 && date.day === 1;
+      if ((current.startYear !== previous.startYear) !== isShrawan1) {
+        expect.fail(`fiscal year went from ${previous.label} to ${current.label} on ${date}`);
+      }
+      if (isShrawan1 && current.startYear !== previous.startYear + 1) {
+        expect.fail(`fiscal year jumped from ${previous.label} to ${current.label} on ${date}`);
+      }
+      previous = current;
+    }
+  });
+
+  it("returns a new object every call", () => {
+    const date = new NepaliDate(2083, 6, 26);
+    const first = date.fiscalYear();
+    first.label = "changed";
+    expect(date.fiscalYear().label).toBe("2083/84");
+    expectTypeOf(first).toEqualTypeOf<FiscalYear>();
+  });
+});
+
+describe("fiscal year ranges", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+  // Every day of fiscal year 2083/84, from its first day to its last.
+  const fy2083 = ["2083-04-01", "2083-06-26", "2083-12-30", "2084-01-01", "2084-03-32"];
+
+  it("gives the moments Shrawan 1 starts in Kathmandu, this year and next", () => {
+    for (const text of fy2083) {
+      expect(iso(NepaliDate.parse(text).range("fiscalYear")), text).toEqual([
+        "2026-07-16T18:15:00.000Z",
+        "2027-07-16T18:15:00.000Z",
+      ]);
+    }
+  });
+
+  it("gives the AD dates of Shrawan 1, this year and next", () => {
+    for (const text of fy2083) {
+      expect(NepaliDate.parse(text).adRange("fiscalYear"), text).toEqual({
+        start: "2026-07-17",
+        end: "2027-07-17",
+      });
+    }
+  });
+
+  it("gives Shrawan 1 and the last day of Asar as startOf and endOf", () => {
+    for (const text of fy2083) {
+      const date = NepaliDate.parse(text);
+      expect(date.startOf("fiscalYear").toString(), text).toBe("2083-04-01");
+      expect(date.endOf("fiscalYear").toString(), text).toBe("2084-03-32");
+    }
+  });
+
+  it("uses each end's own offset across the 1986 change", () => {
+    // Fiscal year 2042/43 started at +05:30 and ended at +05:45.
+    expect(iso(new NepaliDate(2042, 6, 1).range("fiscalYear"))).toEqual([
+      "1985-07-15T18:30:00.000Z",
+      "1986-07-15T18:15:00.000Z",
+    ]);
+  });
+
+  it("takes the same options as the other units", () => {
+    const date = new NepaliDate(2083, 6, 26);
+    expect(date.range("fiscalYear", { as: "iso" })).toEqual({
+      start: "2026-07-16T18:15:00.000Z",
+      end: "2027-07-16T18:15:00.000Z",
+    });
+    expect(date.range("fiscalYear", { as: "ms", offsetMinutes: 0 })).toEqual({
+      start: Date.UTC(2026, 6, 17),
+      end: Date.UTC(2027, 6, 17),
+    });
+  });
+
+  it("covers every whole fiscal year in the table back to back, matching rangeBetween", () => {
+    for (let year = FIRST_YEAR; year < LAST_YEAR; year++) {
+      const shrawan1 = new NepaliDate(year, 4, 1);
+      const nextShrawan1 = new NepaliDate(year + 1, 4, 1);
+      const lastAsar = nextShrawan1.addDays(-1);
+      const label = `${year}/${year + 1}`;
+      expect(lastAsar.month, label).toBe(3);
+      expect(lastAsar.endOf("fiscalYear"), label).toEqual(lastAsar);
+      expect(lastAsar.startOf("fiscalYear"), label).toEqual(shrawan1);
+      expect(shrawan1.range("fiscalYear"), label).toEqual(
+        NepaliDate.rangeBetween(shrawan1, lastAsar),
+      );
+      expect(lastAsar.adRange("fiscalYear"), label).toEqual({
+        start: shrawan1.toAdString(),
+        end: nextShrawan1.toAdString(),
+      });
+    }
+  });
+
+  it("rejects the fiscal years that run past either end of the table", () => {
+    expect(() => NepaliDate.MIN_DATE.range("fiscalYear")).toThrow(
+      /fiscal year 1974\/75 containing 1975-01-01 runs outside the supported range/,
+    );
+    expect(() => new NepaliDate(FIRST_YEAR, 3, 1).adRange("fiscalYear")).toThrow(RangeError);
+    expect(() => NepaliDate.MAX_DATE.adRange("fiscalYear")).toThrow(
+      /fiscal year 2086\/87 containing 2086-12-30 runs outside the supported range/,
+    );
+    expect(() => new NepaliDate(LAST_YEAR, 4, 1).startOf("fiscalYear")).toThrow(RangeError);
+    // The first and last whole fiscal years still work.
+    expect(new NepaliDate(FIRST_YEAR, 4, 1).startOf("fiscalYear").toString()).toBe("1975-04-01");
+    const lastAsar = new NepaliDate(LAST_YEAR, 3, NepaliDate.daysInMonth(LAST_YEAR, 3));
+    expect(lastAsar.range("fiscalYear").end).toEqual(
+      new NepaliDate(LAST_YEAR, 4, 1).startInstant(),
+    );
+  });
+
+  it("compares with isSame, even past the ends of the table", () => {
+    const bs = NepaliDate.parse;
+    expect(bs("2083-12-30").isSame(bs("2084-01-01"), "fiscalYear")).toBe(true);
+    expect(bs("2083-04-01").isSame(bs("2084-03-32"), "fiscalYear")).toBe(true);
+    expect(bs("2083-03-32").isSame(bs("2083-04-01"), "fiscalYear")).toBe(false);
+    expect(NepaliDate.MIN_DATE.isSame(new NepaliDate(FIRST_YEAR, 3, 1), "fiscalYear")).toBe(true);
+    expect(NepaliDate.MIN_DATE.isSame(new NepaliDate(FIRST_YEAR, 4, 1), "fiscalYear")).toBe(false);
+    expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 4, 1), "fiscalYear")).toBe(true);
+    expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 3, 1), "fiscalYear")).toBe(false);
+  });
+});
+
+describe("fiscal quarters", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+  // The quarters of fiscal year 2083/84: a date in each, its first and last days, the moments
+  // they start and the AD dates they cover. Quarter 4 is in BS 2084.
+  const quarters = [
+    {
+      quarter: 1,
+      date: "2083-06-26",
+      first: "2083-04-01",
+      last: "2083-06-31",
+      instants: ["2026-07-16T18:15:00.000Z", "2026-10-17T18:15:00.000Z"],
+      ad: { start: "2026-07-17", end: "2026-10-18" },
+    },
+    {
+      quarter: 2,
+      date: "2083-08-10",
+      first: "2083-07-01",
+      last: "2083-09-30",
+      instants: ["2026-10-17T18:15:00.000Z", "2027-01-14T18:15:00.000Z"],
+      ad: { start: "2026-10-18", end: "2027-01-15" },
+    },
+    {
+      quarter: 3,
+      date: "2083-11-05",
+      first: "2083-10-01",
+      last: "2083-12-30",
+      instants: ["2027-01-14T18:15:00.000Z", "2027-04-13T18:15:00.000Z"],
+      ad: { start: "2027-01-15", end: "2027-04-14" },
+    },
+    {
+      quarter: 4,
+      date: "2084-02-01",
+      first: "2084-01-01",
+      last: "2084-03-32",
+      instants: ["2027-04-13T18:15:00.000Z", "2027-07-16T18:15:00.000Z"],
+      ad: { start: "2027-04-14", end: "2027-07-17" },
+    },
+  ];
+
+  it.each(quarters)("gives quarter $quarter from $first to $last", (q) => {
+    for (const text of [q.first, q.date, q.last]) {
+      const date = NepaliDate.parse(text);
+      expect(date.fiscalQuarter(), text).toBe(q.quarter);
+      expect(date.fiscalYear().label, text).toBe("2083/84");
+      expect(date.startOf("fiscalQuarter").toString(), text).toBe(q.first);
+      expect(date.endOf("fiscalQuarter").toString(), text).toBe(q.last);
+      expect(iso(date.range("fiscalQuarter")), text).toEqual(q.instants);
+      expect(date.adRange("fiscalQuarter"), text).toEqual(q.ad);
+    }
+  });
+
+  it("numbers the months from Shrawan, three to a quarter", () => {
+    const byMonth = Array.from({ length: 12 }, (_, i) => new NepaliDate(2083, i + 1, 1));
+    expect(byMonth.map((date) => date.fiscalQuarter())).toEqual([
+      4, 4, 4, 1, 1, 1, 2, 2, 2, 3, 3, 3,
+    ]);
+    expectTypeOf(byMonth[0].fiscalQuarter()).toEqualTypeOf<FiscalQuarter>();
+  });
+
+  it("covers every month in the table with quarters back to back that make up each fiscal year", () => {
+    let previous: NepaliDate | undefined;
+    for (let year = FIRST_YEAR; year <= LAST_YEAR; year++) {
+      for (const firstMonth of [1, 4, 7, 10]) {
+        const first = new NepaliDate(year, firstMonth, 1);
+        const last = first.endOf("fiscalQuarter");
+        const label = `${year}-${firstMonth}`;
+        expect(last.month, label).toBe(firstMonth + 2);
+        expect(last.day, label).toBe(last.daysInMonth);
+        expect(last.startOf("fiscalQuarter"), label).toEqual(first);
+        expect(first.range("fiscalQuarter"), label).toEqual(NepaliDate.rangeBetween(first, last));
+        expect(first.adRange("fiscalQuarter"), label).toEqual(
+          NepaliDate.adRangeBetween(first, last),
+        );
+        if (previous) expect(previous.addDays(1), label).toEqual(first);
+        previous = last;
+      }
+      if (year < LAST_YEAR) {
+        // A whole fiscal year runs from the start of its Q1 to the end of its Q4.
+        const shrawan1 = new NepaliDate(year, 4, 1);
+        expect(shrawan1.startOf("fiscalYear"), String(year)).toEqual(
+          shrawan1.startOf("fiscalQuarter"),
+        );
+        expect(shrawan1.endOf("fiscalYear"), String(year)).toEqual(
+          new NepaliDate(year + 1, 1, 1).endOf("fiscalQuarter"),
+        );
+      }
+    }
+    expect(previous).toEqual(NepaliDate.MAX_DATE);
+  });
+
+  it("works at both ends of the table, where fiscal years don't", () => {
+    expect(NepaliDate.MIN_DATE.fiscalQuarter()).toBe(4);
+    expect(NepaliDate.MIN_DATE.startOf("fiscalQuarter")).toEqual(NepaliDate.MIN_DATE);
+    expect(NepaliDate.MIN_DATE.range("fiscalQuarter").start).toEqual(
+      NepaliDate.MIN_DATE.startInstant(),
+    );
+    expect(NepaliDate.MAX_DATE.fiscalQuarter()).toBe(3);
+    expect(NepaliDate.MAX_DATE.endOf("fiscalQuarter")).toEqual(NepaliDate.MAX_DATE);
+    expect(NepaliDate.MAX_DATE.range("fiscalQuarter").end.toISOString()).toBe(
+      "2030-04-13T18:15:00.000Z",
+    );
+    expect(NepaliDate.MAX_DATE.adRange("fiscalQuarter").end).toBe("2030-04-14");
+  });
+
+  it("compares with isSame", () => {
+    const bs = NepaliDate.parse;
+    expect(bs("2083-04-01").isSame(bs("2083-06-31"), "fiscalQuarter")).toBe(true);
+    expect(bs("2083-06-31").isSame(bs("2083-07-01"), "fiscalQuarter")).toBe(false);
+    expect(bs("2083-03-32").isSame(bs("2083-04-01"), "fiscalQuarter")).toBe(false);
+    expect(bs("2083-12-30").isSame(bs("2084-01-01"), "fiscalQuarter")).toBe(false);
+    // The same quarter number in another fiscal year is another quarter.
+    expect(bs("2083-04-01").isSame(bs("2084-04-01"), "fiscalQuarter")).toBe(false);
+  });
+});
+
+describe("chaumasik", () => {
+  const iso = ({ start, end }: { start: Date; end: Date }) => [
+    start.toISOString(),
+    end.toISOString(),
+  ];
+  // The chaumasiks of fiscal year 2083/84: a date in each, its first and last days, the moments
+  // they start and the AD dates they cover. The third runs from Chaitra 2083 into Asar 2084.
+  const chaumasiks = [
+    {
+      chaumasik: 1,
+      date: "2083-06-26",
+      first: "2083-04-01",
+      last: "2083-07-30",
+      instants: ["2026-07-16T18:15:00.000Z", "2026-11-16T18:15:00.000Z"],
+      ad: { start: "2026-07-17", end: "2026-11-17" },
+    },
+    {
+      chaumasik: 2,
+      date: "2083-09-10",
+      first: "2083-08-01",
+      last: "2083-11-30",
+      instants: ["2026-11-16T18:15:00.000Z", "2027-03-14T18:15:00.000Z"],
+      ad: { start: "2026-11-17", end: "2027-03-15" },
+    },
+    {
+      chaumasik: 3,
+      date: "2084-02-01",
+      first: "2083-12-01",
+      last: "2084-03-32",
+      instants: ["2027-03-14T18:15:00.000Z", "2027-07-16T18:15:00.000Z"],
+      ad: { start: "2027-03-15", end: "2027-07-17" },
+    },
+  ];
+
+  it.each(chaumasiks)("gives chaumasik $chaumasik from $first to $last", (c) => {
+    for (const text of [c.first, c.date, c.last]) {
+      const date = NepaliDate.parse(text);
+      expect(date.chaumasik(), text).toBe(c.chaumasik);
+      expect(date.fiscalYear().label, text).toBe("2083/84");
+      expect(date.startOf("chaumasik").toString(), text).toBe(c.first);
+      expect(date.endOf("chaumasik").toString(), text).toBe(c.last);
+      expect(iso(date.range("chaumasik")), text).toEqual(c.instants);
+      expect(date.adRange("chaumasik"), text).toEqual(c.ad);
+    }
+  });
+
+  it("numbers the months from Shrawan, four to a chaumasik", () => {
+    const byMonth = Array.from({ length: 12 }, (_, i) => new NepaliDate(2083, i + 1, 1));
+    expect(byMonth.map((date) => date.chaumasik())).toEqual([3, 3, 3, 1, 1, 1, 1, 2, 2, 2, 2, 3]);
+    expectTypeOf(byMonth[0].chaumasik()).toEqualTypeOf<Chaumasik>();
+  });
+
+  it("covers every whole fiscal year in the table with three chaumasiks back to back", () => {
+    for (let year = FIRST_YEAR; year < LAST_YEAR; year++) {
+      const label = `${year}/${year + 1}`;
+      const starts = [
+        new NepaliDate(year, 4, 1),
+        new NepaliDate(year, 8, 1),
+        new NepaliDate(year, 12, 1),
+        new NepaliDate(year + 1, 4, 1),
+      ];
+      for (let i = 0; i < 3; i++) {
+        const first = starts[i];
+        const last = starts[i + 1].addDays(-1);
+        expect(first.endOf("chaumasik"), `${label} ${i + 1}`).toEqual(last);
+        expect(last.startOf("chaumasik"), `${label} ${i + 1}`).toEqual(first);
+        expect(first.range("chaumasik"), `${label} ${i + 1}`).toEqual(
+          NepaliDate.rangeBetween(first, last),
+        );
+        expect(last.adRange("chaumasik"), `${label} ${i + 1}`).toEqual(
+          NepaliDate.adRangeBetween(first, last),
+        );
+      }
+      expect(starts[0].startOf("fiscalYear"), label).toEqual(starts[0].startOf("chaumasik"));
+      expect(starts[2].endOf("fiscalYear"), label).toEqual(starts[2].endOf("chaumasik"));
+    }
+  });
+
+  it("rejects the third chaumasiks that run past either end of the table", () => {
+    expect(() => NepaliDate.MIN_DATE.range("chaumasik")).toThrow(
+      /third chaumasik of fiscal year 1974\/75 containing 1975-01-01 runs outside the supported range/,
+    );
+    expect(() => NepaliDate.MAX_DATE.adRange("chaumasik")).toThrow(
+      /third chaumasik of fiscal year 2086\/87 containing 2086-12-30 runs outside the supported range/,
+    );
+    expect(() => new NepaliDate(LAST_YEAR, 12, 1).startOf("chaumasik")).toThrow(RangeError);
+    // The chaumasiks just inside each end still work.
+    expect(new NepaliDate(FIRST_YEAR, 4, 1).startOf("chaumasik").toString()).toBe("1975-04-01");
+    const lastFalgun = new NepaliDate(LAST_YEAR, 11, NepaliDate.daysInMonth(LAST_YEAR, 11));
+    expect(new NepaliDate(LAST_YEAR, 8, 1).endOf("chaumasik")).toEqual(lastFalgun);
+  });
+
+  it("compares with isSame, even past the ends of the table", () => {
+    const bs = NepaliDate.parse;
+    expect(bs("2083-12-01").isSame(bs("2084-03-32"), "chaumasik")).toBe(true);
+    expect(bs("2083-11-30").isSame(bs("2083-12-01"), "chaumasik")).toBe(false);
+    expect(bs("2083-07-30").isSame(bs("2083-08-01"), "chaumasik")).toBe(false);
+    expect(bs("2084-03-32").isSame(bs("2084-04-01"), "chaumasik")).toBe(false);
+    expect(NepaliDate.MIN_DATE.isSame(new NepaliDate(FIRST_YEAR, 3, 1), "chaumasik")).toBe(true);
+    expect(NepaliDate.MIN_DATE.isSame(new NepaliDate(FIRST_YEAR, 4, 1), "chaumasik")).toBe(false);
+    expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 12, 1), "chaumasik")).toBe(true);
+    expect(NepaliDate.MAX_DATE.isSame(new NepaliDate(LAST_YEAR, 11, 1), "chaumasik")).toBe(false);
+  });
+});
+
+describe("fiscalYearStartMonth", () => {
+  const baisakh = { fiscalYearStartMonth: 1 };
+  const jestha = { fiscalYearStartMonth: 2 };
+  const fiscalUnits = ["fiscalQuarter", "chaumasik", "fiscalYear"] as const;
+
+  it("makes the fiscal year the BS year when it starts in Baisakh", () => {
+    for (const text of ["2083-01-01", "2083-03-32", "2083-04-01", "2083-12-30"]) {
+      const date = NepaliDate.parse(text);
+      expect(date.fiscalYear(baisakh), text).toEqual({
+        startYear: 2083,
+        endYear: 2083,
+        label: "2083",
+      });
+      expect(date.range("fiscalYear", baisakh), text).toEqual(date.range("year"));
+      expect(date.adRange("fiscalYear", baisakh), text).toEqual(date.adRange("year"));
+    }
+  });
+
+  it("counts quarters and chaumasiks from Baisakh", () => {
+    const byMonth = Array.from({ length: 12 }, (_, i) => new NepaliDate(2083, i + 1, 1));
+    expect(byMonth.map((date) => date.fiscalQuarter(baisakh))).toEqual([
+      1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4,
+    ]);
+    expect(byMonth.map((date) => date.chaumasik(baisakh))).toEqual([
+      1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
+    ]);
+    const aswin = new NepaliDate(2083, 6, 26);
+    expect(aswin.startOf("fiscalQuarter", baisakh).toString()).toBe("2083-04-01");
+    expect(aswin.endOf("fiscalQuarter", baisakh).toString()).toBe("2083-06-31");
+    expect(aswin.startOf("chaumasik", baisakh).toString()).toBe("2083-05-01"); // Bhadra 1
+    expect(aswin.endOf("chaumasik", baisakh).toString()).toBe("2083-08-29"); // end of Mangsir
+  });
+
+  it("defaults to Shrawan", () => {
+    const shrawan = { fiscalYearStartMonth: 4 };
+    for (const text of ["2083-01-01", "2083-04-01", "2083-08-15", "2083-12-30"]) {
+      const date = NepaliDate.parse(text);
+      expect(date.fiscalYear(shrawan), text).toEqual(date.fiscalYear());
+      expect(date.fiscalQuarter(shrawan), text).toBe(date.fiscalQuarter());
+      expect(date.chaumasik(shrawan), text).toBe(date.chaumasik());
+      for (const unit of fiscalUnits) {
+        expect(date.range(unit, shrawan), `${text} ${unit}`).toEqual(date.range(unit));
+      }
+    }
+  });
+
+  it("splits every whole fiscal year into quarters and chaumasiks, for every start month", () => {
+    for (let startMonth = 1; startMonth <= 12; startMonth++) {
+      const options = { fiscalYearStartMonth: startMonth };
+      // A fiscal year that starts after Baisakh ends in the next BS year.
+      const lastStartYear = startMonth === 1 ? LAST_YEAR : LAST_YEAR - 1;
+      for (let year = FIRST_YEAR; year <= lastStartYear; year++) {
+        const label = `${year}-${startMonth}`;
+        const start = new NepaliDate(year, startMonth, 1);
+        const end = start.endOf("fiscalYear", options);
+        expect(start.startOf("fiscalYear", options), label).toEqual(start);
+        expect(start.fiscalYear(options).startYear, label).toBe(year);
+        expect(end.fiscalYear(options), label).toEqual(start.fiscalYear(options));
+        if (!end.isEqual(NepaliDate.MAX_DATE)) {
+          expect(end.addDays(1).month, label).toBe(startMonth);
+          expect(end.addDays(1).day, label).toBe(1);
+        }
+        for (const [unit, count] of [
+          ["fiscalQuarter", 4],
+          ["chaumasik", 3],
+        ] as const) {
+          let first = start;
+          for (let n = 1; n <= count; n++) {
+            // The units share their names with the methods that number them.
+            const last = first.endOf(unit, options);
+            expect([first[unit](options), last[unit](options)], `${label} ${unit} ${n}`).toEqual([
+              n,
+              n,
+            ]);
+            expect(last.startOf(unit, options), `${label} ${unit} ${n}`).toEqual(first);
+            if (n < count) first = last.addDays(1);
+            else expect(last, `${label} ${unit} ${n}`).toEqual(end);
+          }
+        }
+      }
+    }
+  });
+
+  it("throws for periods that cross into a BS year outside the table, and only those", () => {
+    // From Baisakh, nothing crosses a BS year boundary, so every fiscal period fits.
+    for (const unit of fiscalUnits) {
+      expect(NepaliDate.MIN_DATE.startOf(unit, baisakh), unit).toEqual(NepaliDate.MIN_DATE);
+      expect(NepaliDate.MAX_DATE.endOf(unit, baisakh), unit).toEqual(NepaliDate.MAX_DATE);
+    }
+    // From Jestha, the fourth quarter runs Falgun to Baisakh, across the year boundary.
+    expect(NepaliDate.MIN_DATE.fiscalYear(jestha).label).toBe("1974/75");
+    expect(() => NepaliDate.MIN_DATE.range("fiscalQuarter", jestha)).toThrow(
+      /fourth quarter of fiscal year 1974\/75 containing 1975-01-01 runs outside the supported range/,
+    );
+    expect(() => NepaliDate.MAX_DATE.adRange("chaumasik", jestha)).toThrow(
+      /third chaumasik of fiscal year 2086\/87 containing 2086-12-30 runs outside/,
+    );
+    expect(NepaliDate.MIN_DATE.addMonths(1).startOf("fiscalQuarter", jestha).toString()).toBe(
+      "1975-02-01",
+    );
+  });
+
+  it("is used by isSame", () => {
+    const asar = NepaliDate.parse("2083-03-32");
+    const shrawan = NepaliDate.parse("2083-04-01");
+    expect(asar.isSame(shrawan, "fiscalYear")).toBe(false);
+    expect(asar.isSame(shrawan, "fiscalYear", baisakh)).toBe(true);
+    expect(asar.isSame(shrawan, "fiscalQuarter", baisakh)).toBe(false);
+    expect(asar.isSame(shrawan, "chaumasik", baisakh)).toBe(true);
+  });
+
+  it("rejects values that aren't 1–12, for every unit", () => {
+    const date = new NepaliDate(2083, 6, 26);
+    for (const fiscalYearStartMonth of [0, 13, 1.5, Number.NaN, "4"]) {
+      const options = { fiscalYearStartMonth: fiscalYearStartMonth as never };
+      const message = /fiscalYearStartMonth must be 1 \(Baisakh\) to 12 \(Chaitra\)/;
+      const label = String(fiscalYearStartMonth);
+      expect(() => date.fiscalYear(options), label).toThrow(message);
+      expect(() => date.fiscalQuarter(options), label).toThrow(message);
+      expect(() => date.chaumasik(options), label).toThrow(message);
+      expect(() => date.range("fiscalYear", options), label).toThrow(message);
+    }
+    // Checked for every unit, like weekStartsOn, so a typo is caught before the unit changes.
+    expect(() => date.adRange("day", { fiscalYearStartMonth: 13 })).toThrow(RangeError);
+    expect(() => date.isSame(date, "week", { fiscalYearStartMonth: 0 })).toThrow(RangeError);
+  });
+
+  it("is typed in the options of every range method", () => {
+    const date2083 = new NepaliDate(2083, 6, 26);
+    expectTypeOf(date2083.fiscalYear).parameter(0).toEqualTypeOf<FiscalYearOptions | undefined>();
+    expectTypeOf(date2083.startOf).parameter(1).toEqualTypeOf<PeriodOptions | undefined>();
+    expectTypeOf<RangeOptions>().toMatchTypeOf<PeriodOptions>();
+  });
+});
+
 describe("serialization", () => {
   it("writes YYYY-MM-DD with a zero-padded month and day", () => {
     expect(new NepaliDate(2083, 6, 26).toString()).toBe("2083-06-26");
@@ -224,7 +748,7 @@ describe("NepaliDate.parse", () => {
 
   it("round-trips every day in the table", () => {
     for (let days = 0; days < TOTAL_DAYS; days++) {
-      const text = NepaliDate.fromDays(days).toString();
+      const text = fromDays(days).toString();
       if (NepaliDate.parse(text).toString() !== text) {
         expect.fail(`parse(${JSON.stringify(text)}) did not return the same date`);
       }
@@ -475,7 +999,7 @@ describe("startInstant", () => {
 
   it("is the first moment of the date for every day in the table", () => {
     for (let days = 0; days < TOTAL_DAYS; days++) {
-      const date = NepaliDate.fromDays(days);
+      const date = fromDays(days);
       const start = date.startInstant().getTime();
       const sameDay = NepaliDate.fromInstant(start).toString() === date.toString();
       const dayBefore =
@@ -583,7 +1107,7 @@ describe("range", () => {
 
   it("rejects unknown units", () => {
     expect(() => new NepaliDate(2083, 7, 1).range("quarter" as never)).toThrow(
-      /unit must be "day", "week", "month" or "year", got "quarter"/,
+      /unit must be "day", "week", "month", "fiscalQuarter", "chaumasik", "year" or "fiscalYear", got "quarter"/,
     );
   });
 });

@@ -6,10 +6,16 @@ export type { MonthName } from "./defined.js";
 export type { DateParts } from "./core/days.js";
 export type {
   AdDateRange,
+  Age,
+  Chaumasik,
+  FiscalQuarter,
+  FiscalYear,
+  FiscalYearOptions,
   InstantFormat,
   InstantFormatTypes,
   InstantOptions,
   InstantRange,
+  PeriodOptions,
   RangeOptions,
   RangeUnit,
   WeekOptions,
