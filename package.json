@@ -1,7 +1,7 @@
 {
   "name": "nepali-date-system",
-  "version": "0.5.0",
-  "description": "Nepali date converter and Bikram Sambat calendar for JavaScript and TypeScript: BS to AD and AD to BS, today's date in Nepal on any server, database query ranges, date arithmetic, and formatting in English or Nepali (Devanagari)",
+  "version": "1.0.0",
+  "description": "Nepali date converter and Bikram Sambat calendar for JavaScript and TypeScript: BS to AD and AD to BS, today's date in Nepal on any server, database query ranges, Nepal fiscal years and quarters, age and date differences, and formatting in English or Nepali (Devanagari)",
   "keywords": [
     "nepali",
     "nepali-date",
@@ -19,8 +19,19 @@
     "devanagari",
     "kathmandu",
     "timezone",
-    "typescript"
+    "typescript",
+    "fiscal-year",
+    "nepal-fiscal-year",
+    "age"
   ],
+  "homepage": "https://github.com/saurabbikramsen/nepali-date-system#readme",
+  "bugs": {
+    "url": "https://github.com/saurabbikramsen/nepali-date-system/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saurabbikramsen/nepali-date-system.git"
+  },
   "author": "Saurab Bikram Sen",
   "license": "MIT",
   "type": "module",
@@ -42,8 +53,12 @@
   },
   "sideEffects": false,
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -56,6 +71,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "smoke": "node scripts/smoke.mjs",
     "prepack": "npm run build",
     "prepublishOnly": "npm test && npm run typecheck"
   },
