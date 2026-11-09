@@ -1,5 +1,9 @@
 # nepali-date-system
 
+[![npm](https://img.shields.io/npm/v/nepali-date-system)](https://www.npmjs.com/package/nepali-date-system)
+[![CI](https://github.com/saurabbikramsen/nepali-date-system/actions/workflows/ci.yml/badge.svg)](https://github.com/saurabbikramsen/nepali-date-system/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/npm/l/nepali-date-system)](LICENSE)
+
 Bikram Sambat (BS, the Nepali calendar) dates for JavaScript and TypeScript. Converts between BS and AD using a month-length table checked against published panchangs and dated historical documents.
 
 It also gives you today's date in Nepal on a server in any time zone, and the exact start and end of Nepali days, months and years, and of fiscal years, quarters and chaumasik periods, for database queries. It adds and compares dates, and formats and parses them in English or Nepali, with 0–9 or Devanagari digits.
@@ -7,7 +11,7 @@ It also gives you today's date in Nepal on a server in any time zone, and the ex
 ## Why this library
 
 - **The right date on any server.** `NepaliDate.today()` and `NepaliDate.fromInstant()` give the date in Kathmandu whether your server runs in UTC, the US or Nepal. Libraries that read the server's local time are wrong for part of every day on servers outside Nepal: on a UTC server, from 18:15 to midnight.
-- **Ready for database queries.** `range()` gives the exact start and end of any Nepali day, week, month or year, so `>= start AND < end` never drops or double-counts a row.
+- **Ready for database queries.** `range()` gives the exact start and end of any Nepali day, week, month or year, or fiscal year, quarter or chaumasik, so `>= start AND < end` never drops or double-counts a row.
 - **Checked month data.** Month lengths for BS 1975–2086 are cross-checked across open-source tables and published panchangs, and the years where tables disagree are settled from documents written at the time. The tests check 116 dated historical events and every day in the table.
 - **Safe to pass around.** Dates are immutable, every method returns a new one, and there are no runtime dependencies.
 
@@ -19,6 +23,8 @@ How it compares with [nepali-date-converter](https://www.npmjs.com/package/nepal
 | Date in Nepal on a UTC or US server          | Yes                | No: uses the server's local time           |
 | Day, week, month and year ranges for queries | Yes                | No                                         |
 | Add days, weeks, months and years            | Yes, with clamping | No                                         |
+| Fiscal years, quarters and chaumasik periods | Yes                | No                                         |
+| Date differences and age                     | Yes                | No                                         |
 | Dates can't be changed by accident           | Yes, immutable     | No: `setDate`, `setMonth` and `setYear` do |
 | Nepali names and Devanagari digits           | Yes                | Yes                                        |
 | TypeScript types                             | Yes                | Yes                                        |
@@ -29,7 +35,7 @@ How it compares with [nepali-date-converter](https://www.npmjs.com/package/nepal
 npm install nepali-date-system
 ```
 
-No runtime dependencies. Ships ESM and CommonJS builds with TypeScript types.
+No runtime dependencies. Ships ESM and CommonJS builds with TypeScript types. Needs Node.js 18 or later; in the browser, any bundler and current browser.
 
 ## Quick start
 
@@ -609,7 +615,7 @@ Pass `onDate` to check the age on another date, such as the last day to apply wh
 
 As moments in time, for `fromInstant` and `today`, the range runs from 1918-04-12T18:18:44Z (midnight in Kathmandu as 1975-01-01 began) up to, but not including, 2030-04-13T18:15:00Z. After that, `today()` throws a `RangeError` until a later release extends the table.
 
-Years 1975–2083 match published calendars. **Years 2084–2086 are provisional**: their official panchangs are not published yet, so the table uses the month lengths that current calendar apps and libraries agree on. They may change in a later release once the official calendars come out.
+Years 1975–2083 match published calendars. **Years 2084–2086 are provisional**: their official panchangs are not published yet, so the table uses the month lengths that current calendar apps and libraries agree on. They may change in a later release once the official calendars come out: see [Versioning](#versioning).
 
 The range is also available in code:
 
@@ -662,6 +668,28 @@ Every record cites its source: the original document, article or catalogue entry
 
 The table is also compared day by day with [nepali-date-converter](https://www.npmjs.com/package/nepali-date-converter) for BS 2000–2086, in both directions. The two agree everywhere except Baisakh–Jestha 2062, where 2005 newspaper datelines confirm this table, and the provisional years 2084–2086.
 
+## Versioning
+
+This package follows [semantic versioning](https://semver.org): an API change that could break your code only comes in a new major version.
+
+Calendar data is the exception. When official calendars confirm or correct the provisional years, or a release adds new years, the change comes in a minor or patch release, never a major one, because a wrong calendar shouldn't wait for one. Each data change is listed in the [changelog](CHANGELOG.md). If you store dates after `LAST_OFFICIAL_YEAR`, check the changelog when you upgrade.
+
+## Contributing
+
+Bug reports and corrections to calendar data are welcome in [GitHub issues](https://github.com/saurabbikramsen/nepali-date-system/issues). For a calendar correction, please include a source, such as a published panchang or a dated document.
+
+To work on the code:
+
+```sh
+git clone https://github.com/saurabbikramsen/nepali-date-system.git
+cd nepali-date-system
+npm ci
+npm test          # the full test suite
+npm run lint      # ESLint, plus `npm run format:check` for Prettier
+npm run typecheck
+npm run build && npm run smoke   # the built package, as ESM and CommonJS
+```
+
 ## License
 
-MIT
+[MIT](LICENSE)

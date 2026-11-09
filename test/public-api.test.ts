@@ -134,6 +134,61 @@ describe("public API", () => {
     expect(Object.keys(new api.NepaliDate(2083, 6, 26))).toEqual(["year", "month", "day"]);
   });
 
+  it("lets every static method be called on its own, without NepaliDate as this", () => {
+    const {
+      adRangeBetween,
+      age,
+      compare,
+      daysInMonth,
+      daysInYear,
+      eachDay,
+      eachMonth,
+      fromAd,
+      fromInstant,
+      isValid,
+      max,
+      min,
+      parse,
+      rangeBetween,
+      today,
+    } = api.NepaliDate;
+    const a = parse("2083-06-26");
+    const b = fromAd(2026, 11, 1); // 2083-07-15
+    expect([b, a].sort(compare).map(String)).toEqual(["2083-06-26", "2083-07-15"]);
+    // map passes an index as the second argument, which parse ignores.
+    expect(["2083-06-26", "2083-07-15"].map(parse).map(String)).toEqual([
+      "2083-06-26",
+      "2083-07-15",
+    ]);
+    expect([String(min(a, b)), String(max([a, b]))]).toEqual(["2083-06-26", "2083-07-15"]);
+    expect(String(fromInstant("2026-10-17T18:15:00Z"))).toBe("2083-07-01");
+    expect(today()).toBeInstanceOf(api.NepaliDate);
+    expect([isValid(2083, 3, 32), daysInMonth(2083, 3), daysInYear(2081)]).toEqual([true, 32, 366]);
+    expect(rangeBetween(a, b, { as: "iso" }).start).toBe("2026-10-11T18:15:00.000Z");
+    expect(adRangeBetween(a, b)).toEqual({ start: "2026-10-12", end: "2026-11-02" });
+    expect([eachDay(a, b).length, eachMonth(a, b).length]).toEqual([21, 2]); // Aswin has 31 days
+    expect(age(parse("2056-05-15"), a)).toEqual({ years: 27, months: 1, days: 11 });
+  });
+
+  it("declares this: void on every static method, so unbound-method doesn't flag them", () => {
+    const { NepaliDate } = api;
+    expectTypeOf(NepaliDate.adRangeBetween).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.age).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.compare).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.daysInMonth).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.daysInYear).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.eachDay).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.eachMonth).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.fromAd).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.fromInstant).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.isValid).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.max).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.min).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.parse).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.rangeBetween).thisParameter.toEqualTypeOf<void>();
+    expectTypeOf(NepaliDate.today).thisParameter.toEqualTypeOf<void>();
+  });
+
   it("no longer has fromDays, which exposed internal day numbers", () => {
     expect("fromDays" in api.NepaliDate).toBe(false);
     expect("fromDays" in api).toBe(false);

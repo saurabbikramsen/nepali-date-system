@@ -351,15 +351,19 @@ export class NepaliDate {
     Object.freeze(this);
   }
 
+  // Static methods declare `this: void` because none of them use `this`. That lets code pass
+  // them around on their own, as in `dates.sort(NepaliDate.compare)` or
+  // `texts.map(NepaliDate.parse)`, without typescript-eslint's unbound-method rule objecting.
+
   // -------------factories---------------
   /**
    * Converts an AD date to BS. Takes numbers, or a year-first string such as
    * "2026-10-12", "2026/10/12", "2026.10.12" or "2026 10 12", in 0–9 or Devanagari digits
    * (२०२६-१०-१२).
    */
-  static fromAd(text: string): NepaliDate;
-  static fromAd(year: number, month: number, day: number): NepaliDate;
-  static fromAd(yearOrText: number | string, month?: number, day?: number): NepaliDate {
+  static fromAd(this: void, text: string): NepaliDate;
+  static fromAd(this: void, year: number, month: number, day: number): NepaliDate;
+  static fromAd(this: void, yearOrText: number | string, month?: number, day?: number): NepaliDate {
     if (typeof yearOrText === "string") {
       return fromDays(adToDays(...parseYearFirst(yearOrText, "AD")));
     }
@@ -372,7 +376,11 @@ export class NepaliDate {
    * "2026-10-18T10:30:00Z" or "2026-10-18T16:15:00+05:45".
    * Pass `offsetMinutes` to read the date at a fixed UTC offset instead of Nepal's.
    */
-  static fromInstant(instant: Date | string | number, options?: InstantOptions): NepaliDate {
+  static fromInstant(
+    this: void,
+    instant: Date | string | number,
+    options?: InstantOptions,
+  ): NepaliDate {
     const ms = toEpochMs(instant);
     const offsetMs = overrideOffsetMs(options) ?? nepalOffsetMs(ms);
     const days = instantToDays(ms, offsetMs);
@@ -391,7 +399,7 @@ export class NepaliDate {
    * changes at 18:15 UTC. Pass `offsetMinutes` for today's date at another fixed offset.
    * Throws RangeError after the last supported date (2086-12-30).
    */
-  static today(options?: InstantOptions): NepaliDate {
+  static today(this: void, options?: InstantOptions): NepaliDate {
     return NepaliDate.fromInstant(Date.now(), options);
   }
 
@@ -402,6 +410,7 @@ export class NepaliDate {
    * strings or epoch ms. Throws RangeError if `to` is before `from`.
    */
   static rangeBetween<F extends InstantFormat = "date">(
+    this: void,
     from: NepaliDate,
     to: NepaliDate,
     options?: RangeOptions<F>,
@@ -415,7 +424,7 @@ export class NepaliDate {
    * of `from` and `end` the day after `to`, so query with `>= start AND < end`. No time zone
    * is involved. Throws RangeError if `to` is before `from`.
    */
-  static adRangeBetween(from: NepaliDate, to: NepaliDate): AdDateRange {
+  static adRangeBetween(this: void, from: NepaliDate, to: NepaliDate): AdDateRange {
     const [first, next] = NepaliDate.spanDays(from, to, "adRangeBetween");
     return { start: adDateString(first), end: adDateString(next) };
   }
@@ -424,7 +433,7 @@ export class NepaliDate {
    * Every date from `from` to `to`, both included, oldest first: one entry per day for a daily
    * report. Throws RangeError if `to` is before `from`.
    */
-  static eachDay(from: NepaliDate, to: NepaliDate): NepaliDate[] {
+  static eachDay(this: void, from: NepaliDate, to: NepaliDate): NepaliDate[] {
     const [first, next] = NepaliDate.spanDays(from, to, "eachDay");
     return Array.from({ length: next - first }, (_, i) => fromDays(first + i));
   }
@@ -434,7 +443,7 @@ export class NepaliDate {
    * oldest first: one entry per month for a monthly report, e.g. with `.range("month")` for each.
    * Throws RangeError if `to` is before `from`.
    */
-  static eachMonth(from: NepaliDate, to: NepaliDate): NepaliDate[] {
+  static eachMonth(this: void, from: NepaliDate, to: NepaliDate): NepaliDate[] {
     NepaliDate.spanDays(from, to, "eachMonth");
     // Count months from year 0, as addMonths does, so a year boundary is a multiple of 12.
     const first = from.year * 12 + (from.month - 1);
@@ -463,7 +472,7 @@ export class NepaliDate {
    * with one kind of separator throughout, in 0–9 or Devanagari digits (२०८३-०६-२६).
    * Throws RangeError for any other format or an impossible date.
    */
-  static parse(text: string): NepaliDate;
+  static parse(this: void, text: string): NepaliDate;
   /**
    * Reads a BS date written with a pattern of NepaliDate#format tokens, such as
    * `parse("26 Asoj 2083", "D MMMM YYYY")`. Month names can be in any common spelling, English
@@ -475,8 +484,8 @@ export class NepaliDate {
    * Pass `{ strict: false }` to relax all four. Throws RangeError if the text doesn't match
    * or the date is impossible.
    */
-  static parse(text: string, pattern: string, options?: ParseOptions): NepaliDate;
-  static parse(text: string, pattern?: string, options?: ParseOptions): NepaliDate {
+  static parse(this: void, text: string, pattern: string, options?: ParseOptions): NepaliDate;
+  static parse(this: void, text: string, pattern?: string, options?: ParseOptions): NepaliDate {
     // Only a string is a pattern, so dates.map(NepaliDate.parse), which passes an index and the
     // array as extra arguments, keeps reading year-first dates.
     if (typeof pattern !== "string") {
@@ -500,17 +509,17 @@ export class NepaliDate {
   static readonly MAX_DATE: NepaliDate = new NepaliDate(LAST_YEAR, 12, daysInMonth(LAST_YEAR, 12));
 
   /** Days in a BS month (29–32). Throws RangeError for an unsupported year or invalid month. */
-  static daysInMonth(year: number, month: number): number {
+  static daysInMonth(this: void, year: number, month: number): number {
     return daysInMonth(year, month);
   }
 
   /** Days in a BS year (365 or 366). Throws RangeError for an unsupported year. */
-  static daysInYear(year: number): number {
+  static daysInYear(this: void, year: number): number {
     return daysInYear(year);
   }
 
   /** Whether a BS date exists and is inside the supported range. Never throws. */
-  static isValid(year: number, month: number, day: number): boolean {
+  static isValid(this: void, year: number, month: number, day: number): boolean {
     return isValidBs(year, month, day);
   }
 
@@ -573,7 +582,7 @@ export class NepaliDate {
    * oldest first when passed to sort: `dates.sort(NepaliDate.compare)`. For newest first, use
    * `dates.sort((a, b) => NepaliDate.compare(b, a))`.
    */
-  static compare(a: NepaliDate, b: NepaliDate): -1 | 0 | 1 {
+  static compare(this: void, a: NepaliDate, b: NepaliDate): -1 | 0 | 1 {
     const difference = checkDate(a, "compare").days - checkDate(b, "compare").days;
     return difference < 0 ? -1 : difference > 0 ? 1 : 0;
   }
@@ -583,9 +592,9 @@ export class NepaliDate {
    * spread into arguments. Returns one of the given dates, the first if several are equal.
    * Throws RangeError if there are none.
    */
-  static min(dates: readonly NepaliDate[]): NepaliDate;
-  static min(...dates: NepaliDate[]): NepaliDate;
-  static min(...args: NepaliDate[] | [readonly NepaliDate[]]): NepaliDate {
+  static min(this: void, dates: readonly NepaliDate[]): NepaliDate;
+  static min(this: void, ...dates: NepaliDate[]): NepaliDate;
+  static min(this: void, ...args: NepaliDate[] | [readonly NepaliDate[]]): NepaliDate {
     return pickDate(args, "min", (candidate, best) => candidate.days < best.days);
   }
   /**
@@ -593,9 +602,9 @@ export class NepaliDate {
    * Returns one of the given dates, the first if several are equal. Throws RangeError if there
    * are none.
    */
-  static max(dates: readonly NepaliDate[]): NepaliDate;
-  static max(...dates: NepaliDate[]): NepaliDate;
-  static max(...args: NepaliDate[] | [readonly NepaliDate[]]): NepaliDate {
+  static max(this: void, dates: readonly NepaliDate[]): NepaliDate;
+  static max(this: void, ...dates: NepaliDate[]): NepaliDate;
+  static max(this: void, ...args: NepaliDate[] | [readonly NepaliDate[]]): NepaliDate {
     return pickDate(args, "max", (candidate, best) => candidate.days > best.days);
   }
   /** Whether this date is earlier than `other`. */
@@ -672,7 +681,7 @@ export class NepaliDate {
    * Chaitra 2082. Adding the years and months to `birthDate` in one addMonths call, then the
    * days, gives `onDate`. Throws RangeError if `birthDate` is after `onDate`.
    */
-  static age(birthDate: NepaliDate, onDate: NepaliDate = NepaliDate.today()): Age {
+  static age(this: void, birthDate: NepaliDate, onDate: NepaliDate = NepaliDate.today()): Age {
     checkDate(birthDate, "age");
     checkDate(onDate, "age");
     if (onDate.days < birthDate.days) {
