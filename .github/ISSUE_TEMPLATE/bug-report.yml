@@ -1,0 +1,49 @@
+name: Bug report
+description: Something else doesn't work as the README or your editor's hints describe.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a BS date converts to the wrong AD date, use the **Wrong date** template instead: it asks for the source calendar.
+  - type: textarea
+    id: code
+    attributes:
+      label: Code
+      description: The shortest code that shows the problem.
+      render: ts
+      placeholder: |
+        import { NepaliDate } from "nepali-date-system";
+
+        NepaliDate.parse("2083-06-26").addMonths(1);
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The result, or the full error message.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: From `npm ls nepali-date-system`.
+      placeholder: 1.0.1
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Node.js, Deno, Bun, a browser or React Native, with its version, and your bundler if you use one.
+      placeholder: Node.js 24.1, or Chrome 140 with Vite 8
+    validations:
+      required: true

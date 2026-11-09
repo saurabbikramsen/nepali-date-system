@@ -122,12 +122,19 @@ export type InstantFormat = "date" | "iso" | "ms";
 
 /** The type of a range bound for each InstantFormat. */
 export interface InstantFormatTypes {
+  /** A Date. */
   date: Date;
+  /** An ISO 8601 string in UTC, such as "2026-10-17T18:15:00.000Z". */
   iso: string;
+  /** Milliseconds since 1970-01-01T00:00:00Z, as Date#getTime gives. */
   ms: number;
 }
 
-/** Options for NepaliDate#range and NepaliDate.rangeBetween. */
+/**
+ * Options for NepaliDate#range and NepaliDate.rangeBetween.
+ *
+ * @typeParam F - The InstantFormat chosen with `as`, which sets the type of the range's bounds.
+ */
 export interface RangeOptions<F extends InstantFormat = "date">
   extends InstantOptions, PeriodOptions {
   /** The type of `start` and `end`: "date" (the default), "iso" or "ms". */
@@ -137,9 +144,13 @@ export interface RangeOptions<F extends InstantFormat = "date">
 /**
  * A half-open span of time: it includes `start` and excludes `end`, which is the start of the
  * next period. Query with `>= start AND < end`.
+ *
+ * @typeParam T - The type of the bounds: Date (the default), string or number.
  */
 export interface InstantRange<T = Date> {
+  /** The moment the range starts, included. */
   start: T;
+  /** The moment the next period starts, not included. */
   end: T;
 }
 
@@ -248,7 +259,9 @@ function formatInstant(ms: number, as: InstantFormat): Date | string | number {
  * `start` and excludes `end`, the day after the last one. Query with `>= start AND < end`.
  */
 export interface AdDateRange {
+  /** The first AD date in the range, as YYYY-MM-DD. */
   start: string;
+  /** The AD date after the last one, as YYYY-MM-DD: not in the range. */
   end: string;
 }
 
@@ -314,6 +327,7 @@ function checkWholeNumber(amount: number, unit: ArithmeticUnit): void {
 
 /** An age, from NepaliDate.age: full years, then full months, then days. */
 export interface Age {
+  /** Full years. */
   years: number;
   /** Full months after the years, 0–11. */
   months: number;
@@ -335,14 +349,32 @@ function fullMonthsBetween(earlier: NepaliDate, later: NepaliDate): number {
   return landingDay > later.day ? months - 1 : months;
 }
 
+/**
+ * A date in Bikram Sambat (BS), the Nepali calendar, from 1975-01-01 to 2086-12-30 BS
+ * (1918-04-13 to 2030-04-13 AD). Months are numbered from 1, Baisakh, to 12, Chaitra.
+ *
+ * Make one from its BS year, month and day, `new NepaliDate(2083, 6, 26)`, or with
+ * NepaliDate.parse, fromAd, fromInstant or today. Dates are immutable: methods such as addDays
+ * return a new NepaliDate. `NepaliDate.fromAd("2026-10-12")` is 2083-06-26, and its
+ * `format("D MMMM YYYY")` is "26 Aswin 2083".
+ */
 export class NepaliDate {
+  /** The BS year, such as 2083. */
   readonly year: number;
+  /** The BS month, 1 (Baisakh) to 12 (Chaitra). */
   readonly month: number;
+  /** The day of the month, from 1 to the month's length, which is 29 to 32 days. */
   readonly day: number;
 
   /** Day number since Baisakh 1 of FIRST_YEAR. Non-enumerable, so it stays out of keys, spreads and logs. */
   declare private readonly days: number;
 
+  /**
+   * The BS date with this year, month (1–12, Baisakh first) and day:
+   * `new NepaliDate(2083, 6, 26)`. Throws RangeError if the date doesn't exist, such as day 32 of
+   * a 31-day month, or is outside the supported range. NepaliDate.isValid checks a date without
+   * throwing.
+   */
   constructor(year: number, month: number, day: number) {
     Object.defineProperty(this, "days", { value: bsToDays(year, month, day), enumerable: false });
     this.year = year;
@@ -525,15 +557,19 @@ export class NepaliDate {
 
   // ----------getters----------
 
+  /** The day of the week: 0 is Sunday, 6 is Saturday. */
   get dayOfWeek(): Weekday {
     return ((this.days + EPOCH_WEEKDAY) % 7) as Weekday;
   }
+  /** The day of the BS year: 1 for Baisakh 1, up to 365 or 366 for the last day of Chaitra. */
   get dayOfYear(): number {
     return this.days - YEAR_START[this.year - FIRST_YEAR] + 1;
   }
+  /** The number of days in this date's month, 29 to 32. */
   get daysInMonth(): number {
     return daysInMonth(this.year, this.month);
   }
+  /** The number of days in this date's BS year, 365 or 366. */
   get daysInYear(): number {
     return daysInYear(this.year);
   }
@@ -775,6 +811,11 @@ export class NepaliDate {
   }
 
   // conversion
+  /**
+   * The AD (Gregorian) date of this date as numbers, with months 1–12:
+   * `{ year: 2026, month: 10, day: 12 }`. Returns a new object on every call. For a
+   * YYYY-MM-DD string, use toAdString.
+   */
   toAd(): DateParts {
     return daysToAd(this.days);
   }
@@ -891,10 +932,15 @@ export class NepaliDate {
       fiscalMonthStartDay(startYear, startMonth, first + months),
     ];
   }
+  /** The AD date of this date as YYYY-MM-DD, such as "2026-10-12", for DATE columns. */
   toAdString(): string {
     const { year, month, day } = this.toAd();
     return `${year}-${pad2(month)}-${pad2(day)}`;
   }
+  /**
+   * The BS date as YYYY-MM-DD, such as "2083-06-26", which NepaliDate.parse reads back. String()
+   * and template literals use it too. For other formats, use format.
+   */
   toString(): string {
     return `${this.year}-${pad2(this.month)}-${pad2(this.day)}`;
   }
@@ -921,6 +967,10 @@ export class NepaliDate {
   format(pattern: string, options?: FormatOptions): string {
     return formatDate(this, pattern, options);
   }
+  /**
+   * The BS date as YYYY-MM-DD, as toString gives it, so JSON.stringify writes dates as
+   * "2083-06-26". Read them back with NepaliDate.parse.
+   */
   toJSON(): string {
     return this.toString();
   }

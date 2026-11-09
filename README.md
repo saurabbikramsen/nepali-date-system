@@ -4,7 +4,7 @@
 [![CI](https://github.com/saurabbikramsen/nepali-date-system/actions/workflows/ci.yml/badge.svg)](https://github.com/saurabbikramsen/nepali-date-system/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/npm/l/nepali-date-system)](LICENSE)
 
-Bikram Sambat (BS, the Nepali calendar) dates for JavaScript and TypeScript. Converts between BS and AD using a month-length table checked against published panchangs and dated historical documents.
+Nepali dates (Bikram Sambat, or BS) for JavaScript and TypeScript. Converts between BS and AD using a month-length table checked against published panchangs and dated historical documents.
 
 It also gives you today's date in Nepal on a server in any time zone, and the exact start and end of Nepali days, months and years, and of fiscal years, quarters and chaumasik periods, for database queries. It adds and compares dates, and formats and parses them in English or Nepali, with 0–9 or Devanagari digits.
 
@@ -35,7 +35,7 @@ How it compares with [nepali-date-converter](https://www.npmjs.com/package/nepal
 npm install nepali-date-system
 ```
 
-No runtime dependencies. Ships ESM and CommonJS builds with TypeScript types. Needs Node.js 18 or later; in the browser, any bundler and current browser.
+No runtime dependencies. Ships ESM and CommonJS builds with TypeScript types. Works on Node.js 18 and later, Deno, Bun, current browsers through any bundler, and React Native. CI tests every change on Node.js 18, 20, 22 and 24, Deno, Bun, a Vite app in Chromium, Firefox and WebKit, and React Native's Metro bundler and Hermes engine.
 
 ## Quick start
 
@@ -605,6 +605,135 @@ Pass `onDate` to check the age on another date, such as the last day to apply wh
 
 `birthDate.addYears(18)` is the day someone turns 18, which you can show to applicants who are too young. It throws a `RangeError` if that day is after 2086, the end of the [supported range](#supported-range). `addYears` and `age` agree on birthdays, including ones on a day the month lacks: someone born on `2067-03-32` turns 18 on `2085-03-31`, because Asar 2085 has 31 days. On `2085-03-30` they're 17.
 
+## API reference
+
+Every export, grouped by task. Each group links to the section that explains it with examples. Your editor shows the same descriptions, and more detail, when you hover over a name.
+
+### Creating a date
+
+Explained in [Quick start](#quick-start), [Parsing](#parsing) and [Nepal time](#nepal-time).
+
+| API                                                                | What it does                                                                                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `new NepaliDate(year, month, day)`                                 | The BS date. Months run from 1, Baisakh, to 12, Chaitra.                                                                             |
+| `NepaliDate.parse(text)`                                           | Reads year-first BS text: `"2083-06-26"`, `"2083/6/26"` or `"२०८३-०६-२६"`.                                                           |
+| `NepaliDate.parse(text, pattern, options?)`                        | Reads BS text written with [format tokens](#formatting), such as `"26 Asoj 2083"` with `"D MMMM YYYY"`. Options: `strict`, `locale`. |
+| `NepaliDate.fromAd(text)`<br>`NepaliDate.fromAd(year, month, day)` | Converts an AD date to BS.                                                                                                           |
+| `NepaliDate.fromInstant(instant, options?)`                        | The date in Nepal at a moment: a `Date`, epoch ms, or an ISO string with `Z` or an offset. Option: `offsetMinutes`.                  |
+| `NepaliDate.today(options?)`                                       | Today's date in Nepal, whatever the server's time zone. Option: `offsetMinutes`.                                                     |
+
+### Date parts and fiscal periods
+
+Explained in [Reading a date](#reading-a-date) and [Fiscal periods](#fiscal-periods).
+
+| API                                              | What it does                                                                                 |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `year`, `month`, `day`                           | The BS year, month (1–12) and day.                                                           |
+| `dayOfWeek`                                      | 0 (Sunday) to 6 (Saturday).                                                                  |
+| `dayOfYear`                                      | 1 for Baisakh 1, up to 365 or 366.                                                           |
+| `daysInMonth`, `daysInYear`                      | 29 to 32, and 365 or 366.                                                                    |
+| `fiscalYear(options?)`                           | `{ startYear, endYear, label }`, such as `label: "2083/84"`. Option: `fiscalYearStartMonth`. |
+| `fiscalQuarter(options?)`, `chaumasik(options?)` | 1 to 4, and 1 to 3. Option: `fiscalYearStartMonth`.                                          |
+
+### Converting and printing
+
+Explained in [Quick start](#quick-start), [Storing and sending dates](#storing-and-sending-dates) and [Formatting](#formatting).
+
+| API                         | What it does                                                                 |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| `toAd()`                    | The AD date as `{ year, month, day }`.                                       |
+| `toAdString()`              | The AD date as `"2026-10-12"`.                                               |
+| `toString()`, `toJSON()`    | The BS date as `"2083-06-26"`.                                               |
+| `format(pattern, options?)` | Text from tokens such as `"dddd, D MMMM YYYY"`. Options: `locale`, `digits`. |
+| `startInstant(options?)`    | The moment the day starts in Nepal, as a `Date`. Option: `offsetMinutes`.    |
+
+### Arithmetic
+
+Explained in [Date arithmetic and comparison](#date-arithmetic-and-comparison) and [Adding months and years](#adding-months-and-years).
+
+| API                                                | What it does                                                                                               |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `addDays(n)`, `addWeeks(n)`                        | The date `n` days or weeks later, or earlier for a negative `n`.                                           |
+| `addMonths(n)`, `addYears(n)`                      | The same day `n` months or years later, moved back to the month's last day if it's shorter.                |
+| `startOf(unit, options?)`, `endOf(unit, options?)` | The first and last day of the period containing the date. Options: `weekStartsOn`, `fiscalYearStartMonth`. |
+
+### Comparing and measuring
+
+Explained in [Date arithmetic and comparison](#date-arithmetic-and-comparison) and [Age check](#age-check).
+
+| API                                                              | What it does                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `isBefore(other)`, `isAfter(other)`, `isEqual(other)`            | Compare two dates. Use `isEqual`, not `===`, which compares objects.            |
+| `isSame(other, unit, options?)`                                  | Whether both dates fall in the same week, month, fiscal year or other period.   |
+| `isBetween(from, to)`                                            | Whether the date is from `from` to `to`, both included.                         |
+| `NepaliDate.compare(a, b)`                                       | -1, 0 or 1, for `dates.sort(NepaliDate.compare)`.                               |
+| `NepaliDate.min(...dates)`, `NepaliDate.max(...dates)`           | The earliest or latest date, passed separately or as one array.                 |
+| `diffInDays(other)`, `diffInMonths(other)`, `diffInYears(other)` | Full days, months or years from `other` to this date, negative if it's earlier. |
+| `NepaliDate.age(birthDate, onDate?)`                             | `{ years, months, days }`, on today's date in Nepal unless you pass `onDate`.   |
+
+### Ranges for queries and reports
+
+Explained in [Database queries](#database-queries), [Choosing the value type](#choosing-the-value-type) and [Recipes](#recipes).
+
+| API                                                              | What it does                                                                                                                                                                                          |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `range(unit, options?)`                                          | `{ start, end }`, the moments the period containing the date starts and the next one starts: query with `>= start AND < end`. Options: `as`, `offsetMinutes`, `weekStartsOn`, `fiscalYearStartMonth`. |
+| `adRange(unit, options?)`                                        | `{ start, end }` as AD dates, for DATE columns. Options: `weekStartsOn`, `fiscalYearStartMonth`.                                                                                                      |
+| `NepaliDate.rangeBetween(from, to, options?)`                    | The moments from the start of `from` to the end of `to`. Options: `as`, `offsetMinutes`.                                                                                                              |
+| `NepaliDate.adRangeBetween(from, to)`                            | The AD dates from `from` to `to`, for DATE columns.                                                                                                                                                   |
+| `NepaliDate.eachDay(from, to)`, `NepaliDate.eachMonth(from, to)` | Every day, or the first day of every month, from `from` to `to`.                                                                                                                                      |
+
+### Calendar information
+
+Explained in [Invalid dates](#invalid-dates), [Supported range](#supported-range) and [Custom spellings](#custom-spellings).
+
+| API                                                                  | What it does                                                                    |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `NepaliDate.isValid(year, month, day)`                               | Whether a BS date exists and is supported. Never throws.                        |
+| `NepaliDate.daysInMonth(year, month)`, `NepaliDate.daysInYear(year)` | The length of a BS month or year.                                               |
+| `NepaliDate.MIN_DATE`, `NepaliDate.MAX_DATE`                         | 1975-01-01 and 2086-12-30, the first and last supported dates.                  |
+| `FIRST_YEAR`, `LAST_YEAR`, `LAST_OFFICIAL_YEAR`                      | 1975, 2086, and 2083, the last year whose official calendar has been published. |
+| `MONTH_NAMES`                                                        | The 12 English month names, Baisakh first.                                      |
+| `LOCALES`                                                            | The built-in `en` and `ne` names and digits, to start your own locale from.     |
+
+### Units and options
+
+A `unit` is one of `"day"`, `"week"`, `"month"`, `"fiscalQuarter"`, `"chaumasik"`, `"year"` or `"fiscalYear"`.
+
+| Option                 | Used for                                   | Default                                   |
+| ---------------------- | ------------------------------------------ | ----------------------------------------- |
+| `weekStartsOn`         | Weeks                                      | `0`, Sunday                               |
+| `fiscalYearStartMonth` | Fiscal years, quarters and chaumasiks      | `4`, Shrawan                              |
+| `offsetMinutes`        | Reading or giving a moment in time         | Nepal's own UTC offset                    |
+| `as`                   | The bounds from `range` and `rangeBetween` | `"date"`, or `"iso"` or `"ms"`            |
+| `locale`               | `format` and `parse`                       | `"en"`, or `"ne"` or your own `Locale`    |
+| `digits`               | `format`                                   | The locale's: `"latin"` or `"devanagari"` |
+| `strict`               | `parse` with a pattern                     | `true`                                    |
+
+The package also exports the TypeScript types for these: `AdDateRange`, `Age`, `Chaumasik`, `DateParts`, `DigitSystem`, `FiscalQuarter`, `FiscalYear`, `FiscalYearOptions`, `FormatOptions`, `InstantFormat`, `InstantFormatTypes`, `InstantOptions`, `InstantRange`, `Locale`, `LocaleName`, `MonthName`, `ParseOptions`, `PeriodOptions`, `RangeOptions`, `RangeUnit`, `WeekOptions` and `Weekday`.
+
+### Errors
+
+- `RangeError`: a date that doesn't exist or is outside the [supported range](#supported-range), text that can't be read, or an invalid option.
+- `TypeError`: a value of the wrong type, such as a string where a `NepaliDate` is needed. Read strings with `NepaliDate.parse` first.
+
+## Performance
+
+A million conversions take well under a second, so converting dates won't be what slows down a report. Times for a million calls on an Apple M1 Pro with Node.js 24, over dates spread across the whole supported range:
+
+| Call                                           | Time for a million |
+| ---------------------------------------------- | ------------------ |
+| `date.toAd()`                                  | 0.10 s             |
+| `date.toAdString()`                            | 0.16 s             |
+| `NepaliDate.fromInstant(ms)`                   | 0.22 s             |
+| `NepaliDate.fromAd(year, month, day)`          | 0.33 s             |
+| `NepaliDate.parse("2083-06-26")`               | 0.33 s             |
+| `date.format("D MMMM YYYY")`                   | 0.38 s             |
+| `NepaliDate.fromAd("2026-10-12")`              | 0.51 s             |
+| `date.format("D MMMM YYYY", { locale: "ne" })` | 0.73 s             |
+
+Run `npm run bench` in a clone of the repository to measure them on your machine.
+
 ## Supported range
 
 |                     | BS         | AD         |
@@ -672,23 +801,11 @@ The table is also compared day by day with [nepali-date-converter](https://www.n
 
 This package follows [semantic versioning](https://semver.org): an API change that could break your code only comes in a new major version.
 
-Calendar data is the exception. When official calendars confirm or correct the provisional years, or a release adds new years, the change comes in a minor or patch release, never a major one, because a wrong calendar shouldn't wait for one. Each data change is listed in the [changelog](CHANGELOG.md). If you store dates after `LAST_OFFICIAL_YEAR`, check the changelog when you upgrade.
+Calendar data is the exception. When official calendars confirm or correct the provisional years, or a release adds new years, the change comes in a minor or patch release, never a major one, because a wrong calendar shouldn't wait for one. A correction to a year the table already has, including a provisional year confirmed by its official calendar, comes in a patch release. New years come in a minor release. Each data change is listed in the [changelog](CHANGELOG.md). If you store dates after `LAST_OFFICIAL_YEAR`, check the changelog when you upgrade.
 
 ## Contributing
 
-Bug reports and corrections to calendar data are welcome in [GitHub issues](https://github.com/saurabbikramsen/nepali-date-system/issues). For a calendar correction, please include a source, such as a published panchang or a dated document.
-
-To work on the code:
-
-```sh
-git clone https://github.com/saurabbikramsen/nepali-date-system.git
-cd nepali-date-system
-npm ci
-npm test          # the full test suite
-npm run lint      # ESLint, plus `npm run format:check` for Prettier
-npm run typecheck
-npm run build && npm run smoke   # the built package, as ESM and CommonJS
-```
+Bug reports and calendar corrections are welcome in [GitHub issues](https://github.com/saurabbikramsen/nepali-date-system/issues). The **Wrong date** template asks for the source a correction needs, such as a published panchang or a dated document. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to work on the code, change the calendar data and release.
 
 ## License
 

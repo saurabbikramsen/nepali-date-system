@@ -1,0 +1,61 @@
+name: Wrong date
+description: A date doesn't match a published Nepali calendar or a dated document.
+title: "Wrong date: "
+labels: ["calendar data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for checking. The month lengths come from published panchangs and dated documents, so a correction needs a source that someone else can check. Calendar apps and date converters often copy each other's tables, so on their own they can't settle a disagreement.
+  - type: input
+    id: bs-date
+    attributes:
+      label: BS date
+      description: The Bikram Sambat date that converts wrongly, as YYYY-MM-DD.
+      placeholder: 2084-03-32
+    validations:
+      required: true
+  - type: input
+    id: library-ad
+    attributes:
+      label: AD date from nepali-date-system
+      description: What `NepaliDate.parse("<BS date>").toAdString()` gives.
+      placeholder: 2027-07-16
+    validations:
+      required: true
+  - type: input
+    id: source-ad
+    attributes:
+      label: AD date in your source
+      placeholder: 2027-07-17
+    validations:
+      required: true
+  - type: dropdown
+    id: source-kind
+    attributes:
+      label: Kind of source
+      options:
+        - National panchang, from Nepal Panchanga Nirnayak Bikas Samiti
+        - Another published panchang, such as Surya Panchanga
+        - Printed calendar
+        - Dated document that gives the weekday, or both the BS and AD dates
+        - Newspaper dateline
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source calendar
+      description: |
+        Name the calendar or document in full, with its year and the page or month that shows the date. Add a link, or attach a photo of the page. For example: "National panchang 2084, page 14, Asar".
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: From `npm ls nepali-date-system`.
+      placeholder: 1.0.1
+    validations:
+      required: true
