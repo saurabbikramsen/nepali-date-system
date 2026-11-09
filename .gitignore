@@ -3,3 +3,5 @@ dist
 .env
 roadmap.html
 drafts/
+coverage
+*.tgz

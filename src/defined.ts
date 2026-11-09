@@ -14,6 +14,7 @@ export const MONTH_NAMES = [
   "Chaitra",
 ] as const;
 
+/** An English BS month name from MONTH_NAMES: "Baisakh", "Jestha" … "Chaitra". */
 export type MonthName = (typeof MONTH_NAMES)[number];
 
 /** Days in each of the 12 months of one BS year, Baisakh first. */

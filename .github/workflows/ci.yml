@@ -5,9 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   check:
-    name: Lint, types and build
+    name: Lint, types, build and size
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -20,6 +23,9 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm run build
+      # Fails if the package grows past the limits in .size-limit.json, or if importing LOCALES
+      # or a constant starts pulling in NepaliDate and the parser.
+      - run: npx size-limit
 
   test:
     # Nepal-time results must not depend on the server's time zone, so run the suite in a zone
@@ -40,7 +46,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm test
+      # Prints the coverage of src/ and fails below the thresholds in vitest.config.ts.
+      - run: npm run test:coverage
+      - if: matrix.tz == 'UTC'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage/
 
   node:
     # package.json "engines" says Node 18 and later. The dev tools need a newer Node, so build
@@ -63,3 +75,85 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm run smoke
+
+  deno-bun:
+    # The same smoke test as on Node: Deno and Bun both read package.json "exports" and run
+    # node: imports, so they load the package through its own name, as ESM and CommonJS.
+    name: Deno and Bun
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno run --allow-read=. scripts/smoke.mjs
+      - uses: oven-sh/setup-bun@v2
+      - run: bun scripts/smoke.mjs
+
+  vite:
+    # Browser apps get the package through a bundler, so build a Vite app with the packed
+    # package and run the same checks in Chromium, Firefox and WebKit.
+    name: Vite app in browsers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            test/runtimes/vite/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      # The tarball users would download. The later steps run in another folder, so keep its
+      # absolute path.
+      - run: echo "TGZ=$PWD/$(npm pack --ignore-scripts --silent)" >> "$GITHUB_ENV"
+      - working-directory: test/runtimes/vite
+        run: |
+          npm ci
+          npm install --no-save "$TGZ"
+          npx playwright install --with-deps chromium firefox webkit
+      - working-directory: test/runtimes/vite
+        run: npm test
+
+  react-native:
+    # React Native apps get the package through Metro and run it on Hermes, so bundle it with
+    # React Native's default Metro config and Babel preset, compile it with hermesc as a release
+    # build does, and run the same checks on the Hermes VM.
+    name: React Native (Metro and Hermes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            test/runtimes/react-native/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: echo "TGZ=$PWD/$(npm pack --ignore-scripts --silent)" >> "$GITHUB_ENV"
+      # There's no prebuilt Hermes VM for current React Native, so the test builds one from
+      # source (see hermes.mjs). It needs Ninja and the ICU headers.
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build libicu-dev
+      # The build takes minutes, so cache it, keyed by the hermes-compiler version the test pins
+      # and by the runner image, whose ICU the VM links against.
+      - id: hermes
+        run: echo "key=hermes-$(node -p "require('./test/runtimes/react-native/package.json').devDependencies['hermes-compiler']")-$ImageOS-$(uname -m)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: test/runtimes/react-native/.hermes
+          key: ${{ steps.hermes.outputs.key }}
+      - working-directory: test/runtimes/react-native
+        run: |
+          npm ci
+          npm install --no-save "$TGZ"
+          npm test

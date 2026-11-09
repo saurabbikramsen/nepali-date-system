@@ -2,8 +2,11 @@ import { FIRST_YEAR, FIRST_YEAR_START_AD, LAST_YEAR, MONTH_LENGTHS } from "../de
 
 /** A calendar date with 1-based months, used for both BS and AD dates. */
 export interface DateParts {
+  /** The year: 2083 for a BS date, 2026 for an AD one. */
   year: number;
+  /** The month, 1–12: Baisakh to Chaitra for BS, January to December for AD. */
   month: number;
+  /** The day of the month, from 1. */
   day: number;
 }
 

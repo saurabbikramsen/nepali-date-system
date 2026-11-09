@@ -1,0 +1,31 @@
+[
+  {
+    "name": "import { NepaliDate }: everything",
+    "path": "dist/esm/index.js",
+    "import": "{ NepaliDate }",
+    "limit": "6.5 kB"
+  },
+  {
+    "name": "import { LOCALES }: names only, no NepaliDate, parser or month table",
+    "path": "dist/esm/index.js",
+    "import": "{ LOCALES }",
+    "limit": "500 B"
+  },
+  {
+    "name": "import { MONTH_NAMES }: names only",
+    "path": "dist/esm/index.js",
+    "import": "{ MONTH_NAMES }",
+    "limit": "150 B"
+  },
+  {
+    "name": "import { FIRST_YEAR, LAST_YEAR, LAST_OFFICIAL_YEAR }: numbers only",
+    "path": "dist/esm/index.js",
+    "import": "{ FIRST_YEAR, LAST_YEAR, LAST_OFFICIAL_YEAR }",
+    "limit": "50 B"
+  },
+  {
+    "name": "require(): CommonJS, which bundlers can't tree-shake",
+    "path": "dist/cjs/index.js",
+    "limit": "7.5 kB"
+  }
+]

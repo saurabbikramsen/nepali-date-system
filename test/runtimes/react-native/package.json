@@ -1,0 +1,19 @@
+{
+  "name": "nepali-date-system-react-native-test",
+  "private": true,
+  "description": "Bundles nepali-date-system with Metro and React Native's default config, then runs it on Hermes",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "devDependencies": {
+    "@babel/core": "7.29.13",
+    "@babel/runtime": "7.29.13",
+    "@react-native/babel-preset": "0.88.1",
+    "@react-native/metro-config": "0.88.1",
+    "hermes-compiler": "260318099.0.5",
+    "metro": "0.87.3"
+  },
+  "engines": {
+    "node": "^22.13.0 || ^24.3.0 || >= 26.0.0"
+  }
+}

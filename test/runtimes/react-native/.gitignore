@@ -1,0 +1,2 @@
+# The Hermes VM hermes.mjs builds. Bundles go in node_modules, which the root .gitignore covers.
+.hermes/
